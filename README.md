@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # AgriShare — Peer-to-Peer Farm Equipment Sharing Platform
 
 A backend (Spring Boot) + Android client for small and marginal farmers to
