@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: agrishare
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/agrishare
+    username: agrishare
+    password: agrishare
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate   # schema is owned by Flyway, never by Hibernate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    # 32+ char secret required for HS256; override via APP_JWT_SECRET env var in real deployments
+    secret: ${APP_JWT_SECRET:this-is-a-placeholder-dev-secret-change-me-please}
+    expiration-ms: 86400000   # 24h
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

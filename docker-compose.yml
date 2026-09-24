@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agrishare-db
+    environment:
+      POSTGRES_DB: agrishare
+      POSTGRES_USER: agrishare
+      POSTGRES_PASSWORD: agrishare
+    ports:
+      - "5432:5432"
+    volumes:
+      - agrishare_pgdata:/var/lib/postgresql/data
+
+volumes:
+  agrishare_pgdata:
