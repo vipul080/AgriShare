@@ -1,9 +1,11 @@
 package com.vipul.agrishare.controller;
 
+import com.vipul.agrishare.dto.BookedRange;
 import com.vipul.agrishare.dto.EquipmentRequest;
 import com.vipul.agrishare.dto.EquipmentResponse;
 import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.security.UserPrincipal;
+import com.vipul.agrishare.service.BookingService;
 import com.vipul.agrishare.service.EquipmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ import java.util.List;
 public class EquipmentController {
 
     private final EquipmentService equipmentService;
+    private final BookingService bookingService;
 
     /** Public: browse/search. Pass lat & lng for nearest-first radius search. */
     @GetMapping
@@ -47,6 +50,12 @@ public class EquipmentController {
     @GetMapping("/{id}")
     public EquipmentResponse get(@PathVariable Long id) {
         return equipmentService.get(id);
+    }
+
+    /** Public: dates already taken, so the calendar can grey them out. */
+    @GetMapping("/{id}/booked-dates")
+    public List<BookedRange> bookedDates(@PathVariable Long id) {
+        return bookingService.bookedDates(id);
     }
 
     @PostMapping
