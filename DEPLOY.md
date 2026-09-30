@@ -57,18 +57,14 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker ubuntu
 exit
 ```
-Log in again (`ssh ...`), then give the server read-only access to the private repo:
+Log in again (`ssh ...`), then download the code (the repo is public, so no key is needed):
 ```
-ssh-keygen -t ed25519 -N "" -f ~/.ssh/github
-cat ~/.ssh/github.pub
-```
-Copy the printed line → GitHub → your AgriShare repo → Settings → **Deploy keys** → Add (leave
-"write access" off). Then:
-```
-printf "Host github.com\n  IdentityFile ~/.ssh/github\n" >> ~/.ssh/config
-git clone git@github.com:vipul080/AgriShare.git
+git clone https://github.com/vipul080/AgriShare.git
 cd AgriShare
 ```
+If you ever make the repo private: create a key on the server with
+`ssh-keygen -t ed25519 -N "" -f ~/.ssh/github`, add `~/.ssh/github.pub` under GitHub → repo →
+Settings → **Deploy keys** (read-only), and clone with `git@github.com:vipul080/AgriShare.git`.
 
 ### 6. Settings
 ```
