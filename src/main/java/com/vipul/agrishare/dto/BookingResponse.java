@@ -14,6 +14,9 @@ public record BookingResponse(
         int days,
         BigDecimal pricePerDay,
         BigDecimal totalAmount,
+        /** Online service fee (0 for cash); the renter pays totalAmount + platformFee. */
+        BigDecimal platformFee,
+        BigDecimal amountPayable,
         String status,
         String paymentMethod,
         String paymentStatus,

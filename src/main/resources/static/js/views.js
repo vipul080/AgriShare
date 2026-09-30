@@ -23,11 +23,23 @@ const MAX_DAYS = 30;
 
 let languages = [];
 let categories = [];
+let payConfig = { onlineFeePercent: 0, onlineFeeCap: 0, boost: { enabled: false } };
 
 export async function preload(langs) {
     languages = langs;
-    categories = await get('/api/equipment/categories');
+    [categories, payConfig] = await Promise.all([get('/api/equipment/categories'), get('/api/payments/config')]);
 }
+
+/** Same rule as the server: online payments only, whole rupees, capped. Cash is always free. */
+function onlineFee(rent) {
+    const pct = Number(payConfig.onlineFeePercent);
+    if (!(pct > 0)) return 0;
+    const fee = Math.round((rent * pct) / 100);
+    const cap = Number(payConfig.onlineFeeCap);
+    return cap > 0 ? Math.min(fee, cap) : fee;
+}
+
+const featuredPill = (e) => (e.featured ? html`<span class="pill amber">⭐ ${t('ui.equipment.featured')}</span>` : '');
 export const cachedLanguages = () => languages;
 
 /* ---------------------------------------------------------------- helpers */
@@ -337,6 +349,7 @@ function equipmentCard(e) {
                     <span class="small">${stars(e.averageRating, e.reviewCount)}</span>
                 </div>
                 <div class="row" style="margin-top:4px">
+                    ${featuredPill(e)}
                     ${e.distanceKm != null ? html`<span class="dist">📍 ${t('ui.equipment.distance', { km: e.distanceKm })}</span>` : ''}
                     ${!e.available ? html`<span class="pill red">${t('ui.equipment.unavailable')}</span>` : ''}
                 </div>
@@ -365,6 +378,7 @@ export async function equipmentDetail(main, id) {
                     <div class="title-row"><h1>${e.name}</h1>${speakButton(say)}</div>
                     <div class="row">
                         <span class="pill">${ICONS[e.category]} ${t('ui.category.' + e.category)}</span>
+                        ${featuredPill(e)}
                         <span>${stars(e.averageRating, e.reviewCount)}</span>
                     </div>
                     <p class="price" style="margin-top:10px;font-size:1.6rem">${t('ui.equipment.perDay', { price: money(e.pricePerDay) })}</p>
@@ -396,7 +410,9 @@ export async function equipmentDetail(main, id) {
         <ul class="booked-list">${booked.map((b) => html`<li class="pill amber">${date(b.startDate)} – ${date(b.endDate)}</li>`)}</ul>` : '';
 
     if (mine) {
-        mount(card, html`<p>${t('ui.book.own')}</p>${takenList}<a class="btn block" href="#/equipment/${e.id}/edit">✏️ ${t('ui.book.edit')}</a>`);
+        mount(card, html`<p>${t('ui.book.own')}</p>${takenList}<a class="btn block" href="#/equipment/${e.id}/edit">✏️ ${t('ui.book.edit')}</a>
+            ${boostBox(e)}`);
+        $('#boost-btn')?.addEventListener('click', () => startBoost(e));
         return;
     }
     if (!e.available) {
@@ -443,6 +459,7 @@ function bookingForm(card, e, booked, takenList) {
                     <span class="emoji">📱</span><b>${t('ui.book.online')}</b><small>${t('ui.book.onlineSub')}</small></label>
             </div>
 
+            <p class="muted small" id="fee-line" hidden style="margin:10px 0 0"></p>
             <div class="total-box"><span>${t('ui.book.totalLabel')}</span><b id="total"></b></div>
 
             <details style="margin-bottom:12px"><summary class="muted">💬 ${t('ui.book.note')}</summary>
@@ -454,9 +471,13 @@ function bookingForm(card, e, booked, takenList) {
     const clashes = () => booked.some((b) => b.startDate <= end() && b.endDate >= state.start);
 
     function update() {
+        const rent = state.days * Number(e.pricePerDay);
+        const fee = $('#book-form').pay.value === 'ONLINE' ? onlineFee(rent) : 0;
         $('#days').textContent = daysText(state.days);
         $('#until').textContent = t('ui.book.until', { date: date(end()) });
-        $('#total').textContent = `₹${money(state.days * Number(e.pricePerDay))}`;
+        $('#fee-line').hidden = fee === 0;
+        $('#fee-line').textContent = t('ui.book.fee', { rent: money(rent), fee: money(fee) });
+        $('#total').textContent = `₹${money(rent + fee)}`;
         const clash = clashes();
         $('#clash').hidden = !clash;
         $('#book-submit').disabled = clash;
@@ -480,6 +501,7 @@ function bookingForm(card, e, booked, takenList) {
         if (ev.target.value) state.start = ev.target.value;
         update();
     });
+    $('#book-form').addEventListener('change', (ev) => { if (ev.target.name === 'pay') update(); });
     $('#minus').addEventListener('click', () => { state.days = Math.max(1, state.days - 1); update(); });
     $('#plus').addEventListener('click', () => { state.days = Math.min(MAX_DAYS, state.days + 1); update(); });
     update();
@@ -507,33 +529,68 @@ function bookingForm(card, e, booked, takenList) {
 
 /* ---------------------------------------------------------------- payments */
 
-async function checkout(booking) {
-    const c = booking.checkout;
-    if (c.mode === 'razorpay') return razorpayCheckout(booking);
+function checkout(booking) {
+    return pay(booking.checkout, `${booking.equipment.name} · ${date(booking.startDate)} – ${date(booking.endDate)}`,
+        `/api/bookings/${booking.id}/payment/verify`, t('ui.pay.held'), t('ui.pay.success'));
+}
 
-    // Mock mode: a stand-in dialog so the whole flow can be demoed without real money.
+/**
+ * Shared checkout for bookings and boosts. Resolves with the verify response, or
+ * undefined if the farmer closed it. Mock mode shows a stand-in dialog (no real money).
+ */
+async function pay(c, description, verifyPath, note, successText) {
+    const verify = async (fields) => {
+        const done = await attempt(() => post(verifyPath, fields));
+        if (done) toast(successText);
+        return done;
+    };
+    if (c.mode === 'razorpay') return razorpayCheckout(c, description, verify);
+
     return new Promise((resolve) => {
         const dialog = openModal(html`
             <h2>📱 ${t('ui.pay.title', { amount: money(c.amountPaise / 100) })}</h2>
-            <p>${booking.equipment.name} · ${date(booking.startDate)} – ${date(booking.endDate)}</p>
-            <p class="muted small">🔒 ${t('ui.pay.held')}</p>
+            <p>${description}</p>
+            ${note ? html`<p class="muted small">🔒 ${note}</p>` : ''}
             <p class="pill amber">${t('ui.pay.mockNote')}</p>
             <div class="row" style="margin-top:14px">
                 <button class="btn primary" id="pay-now">✅ ${t('ui.pay.payNow')}</button>
                 <button class="btn" id="pay-later">${t('ui.common.close')}</button>
             </div>`);
-        $('#pay-later', dialog).onclick = () => { closeModal(); resolve(); };
+        $('#pay-later', dialog).onclick = () => { closeModal(); resolve(undefined); };
         $('#pay-now', dialog).onclick = async () => {
-            const done = await attempt(() => post(`/api/bookings/${booking.id}/payment/verify`, {
+            const done = await verify({
                 orderId: c.orderId,
                 paymentId: 'pay_mock_' + Math.random().toString(36).slice(2, 12),
                 signature: 'mock',
-            }));
+            });
             closeModal();
-            if (done) toast(t('ui.pay.success'));
-            resolve();
+            resolve(done);
         };
     });
+}
+
+/** Optional paid listing boost, offered only to the owner and only when switched on. */
+function boostBox(e) {
+    const b = payConfig.boost;
+    if (e.featured) {
+        return html`<div class="status-banner amber" style="margin-top:12px"><span class="emoji">⭐</span>
+            <div><b>${t('ui.boost.active', { date: date(e.featuredUntil) })}</b></div></div>`;
+    }
+    if (!b || !b.enabled) return '';
+    return html`
+        <div class="card" style="margin-top:12px;background:var(--amber-soft);border-color:var(--amber)">
+            <h3>⭐ ${t('ui.boost.title')}</h3>
+            <p class="small">${t('ui.boost.text', { days: b.days })}</p>
+            <button type="button" class="btn amber block" id="boost-btn">⭐ ${t('ui.boost.button', { price: money(b.price) })}</button>
+        </div>`;
+}
+
+async function startBoost(e) {
+    const started = await attempt(() => post(`/api/equipment/${e.id}/boost`));
+    if (!started) return;
+    const done = await pay(started.checkout, `⭐ ${e.name} · ${daysText(started.days)}`,
+        `/api/equipment/boosts/${started.boostId}/verify`, null, t('ui.boost.done'));
+    if (done) equipmentDetail($('#main'), e.id);
 }
 
 function loadRazorpay() {
@@ -547,8 +604,7 @@ function loadRazorpay() {
     });
 }
 
-async function razorpayCheckout(booking) {
-    const c = booking.checkout;
+async function razorpayCheckout(c, description, verify) {
     await loadRazorpay();
     return new Promise((resolve) => {
         const rzp = new window.Razorpay({
@@ -556,14 +612,10 @@ async function razorpayCheckout(booking) {
             amount: c.amountPaise,
             currency: c.currency,
             order_id: c.orderId,
-            name: 'AgriShare',
-            description: booking.equipment.name,
-            handler: async (resp) => {
-                const done = await attempt(() => post(`/api/bookings/${booking.id}/payment/verify`, resp));
-                if (done) toast(t('ui.pay.success'));
-                resolve();
-            },
-            modal: { ondismiss: resolve },
+            name: document.title,
+            description,
+            handler: async (resp) => resolve(await verify(resp)),
+            modal: { ondismiss: () => resolve(undefined) },
             theme: { color: '#2f6b3a' },
         });
         rzp.open();
@@ -764,7 +816,8 @@ function bookingCard(b, asOwner) {
                     <b><a href="#/equipment/${b.equipment.id}">${b.equipment.name}</a></b>
                     <div>📅 ${range} · ${daysText(b.days)}</div>
                     <div class="row">
-                        <span class="price">₹${money(b.totalAmount)}</span>
+                        <span class="price">₹${money(b.amountPayable)}</span>
+                        ${Number(b.platformFee) > 0 ? html`<span class="muted small">${t('ui.booking.fee', { fee: money(b.platformFee) })}</span>` : ''}
                         <span class="pill grey">${b.paymentMethod === 'CASH' ? '💵' : '📱'} ${t('ui.payment.' + b.paymentStatus)}</span>
                     </div>
                     <div class="muted small">${asOwner ? '👨‍🌾' : '🚜'} ${t(asOwner ? 'ui.booking.renter' : 'ui.booking.owner')}: ${other.name}</div>

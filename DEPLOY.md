@@ -1,4 +1,4 @@
-# Putting AgriShare online
+# Putting KisanShare online
 
 The Android app needs the backend on the internet with HTTPS. Two ways:
 
@@ -62,7 +62,7 @@ Log in again (`ssh ...`), then give the server read-only access to the private r
 ssh-keygen -t ed25519 -N "" -f ~/.ssh/github
 cat ~/.ssh/github.pub
 ```
-Copy the printed line → GitHub → AgriShare repo → Settings → **Deploy keys** → Add (leave
+Copy the printed line → GitHub → your AgriShare repo → Settings → **Deploy keys** → Add (leave
 "write access" off). Then:
 ```
 printf "Host github.com\n  IdentityFile ~/.ssh/github\n" >> ~/.ssh/config

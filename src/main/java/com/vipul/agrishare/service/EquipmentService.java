@@ -19,7 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,6 +41,7 @@ public class EquipmentService {
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
     private final RatingService ratingService;
+    private final Clock clock;
 
     @Transactional
     public EquipmentResponse create(Long ownerId, EquipmentRequest request) {
@@ -105,12 +109,12 @@ public class EquipmentService {
             Map<Long, Equipment> byId = equipmentRepository.findByIdIn(distances.keySet()).stream()
                     .collect(Collectors.toMap(Equipment::getId, Function.identity()));
 
-            // preserve distance ordering from the native query
+            // preserve distance ordering from the native query, boosted machines first
             List<Equipment> ordered = hits.stream()
                     .map(h -> byId.get(h.getId()))
                     .filter(Objects::nonNull)
                     .toList();
-            return toResponses(ordered, distances);
+            return toResponses(featuredFirst(ordered), distances);
         }
 
         Specification<Equipment> spec = Specification.where(EquipmentSpecs.isActive())
@@ -118,7 +122,19 @@ public class EquipmentService {
                 .and(EquipmentSpecs.matches(q));
         List<Equipment> results = equipmentRepository.findAll(spec,
                 PageRequest.of(0, MAX_RESULTS, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
-        return toResponses(results, Map.of());
+        return toResponses(featuredFirst(results), Map.of());
+    }
+
+    /** Stable sort: paid "boost" listings move to the top, everything else keeps its order. */
+    private List<Equipment> featuredFirst(List<Equipment> equipment) {
+        Instant now = clock.instant();
+        return equipment.stream()
+                .sorted(Comparator.comparing((Equipment e) -> !isFeatured(e, now)))
+                .toList();
+    }
+
+    static boolean isFeatured(Equipment e, Instant now) {
+        return e.getFeaturedUntil() != null && e.getFeaturedUntil().isAfter(now);
     }
 
     Equipment getOwned(Long ownerId, Long equipmentId) {
@@ -168,6 +184,8 @@ public class EquipmentService {
                 e.getAddress(),
                 e.getImageUrl(),
                 e.isAvailable(),
+                isFeatured(e, clock.instant()),
+                e.getFeaturedUntil(),
                 UserSummary.of(e.getOwner()),
                 distanceKm == null ? null : Math.round(distanceKm * 10) / 10.0,
                 r.average(),

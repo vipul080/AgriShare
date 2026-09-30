@@ -1,5 +1,6 @@
 package com.vipul.agrishare.config;
 
+import com.vipul.agrishare.payment.EarningsProperties;
 import com.vipul.agrishare.payment.PaymentProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -11,7 +12,7 @@ import java.time.ZoneId;
 
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties(PaymentProperties.class)
+@EnableConfigurationProperties({PaymentProperties.class, EarningsProperties.class})
 public class AppConfig {
 
     /** Farmers think in Indian calendar days, so "today" is always IST. Injected so tests can pin time. */

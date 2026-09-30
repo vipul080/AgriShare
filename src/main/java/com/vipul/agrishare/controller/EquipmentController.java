@@ -3,10 +3,12 @@ package com.vipul.agrishare.controller;
 import com.vipul.agrishare.dto.BookedRange;
 import com.vipul.agrishare.dto.EquipmentRequest;
 import com.vipul.agrishare.dto.EquipmentResponse;
+import com.vipul.agrishare.dto.PaymentVerifyRequest;
 import com.vipul.agrishare.dto.ReviewResponse;
 import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.security.UserPrincipal;
 import com.vipul.agrishare.service.BookingService;
+import com.vipul.agrishare.service.BoostService;
 import com.vipul.agrishare.service.EquipmentService;
 import com.vipul.agrishare.service.ReviewService;
 import jakarta.validation.Valid;
@@ -29,6 +31,7 @@ public class EquipmentController {
     private final EquipmentService equipmentService;
     private final BookingService bookingService;
     private final ReviewService reviewService;
+    private final BoostService boostService;
 
     /** Public: browse/search. Pass lat & lng for nearest-first radius search. */
     @GetMapping
@@ -85,6 +88,19 @@ public class EquipmentController {
                                          @PathVariable Long id,
                                          @RequestParam("file") MultipartFile file) {
         return equipmentService.uploadImage(user.getId(), id, file);
+    }
+
+    /** Owner starts paying for a "boost" (shown first in searches for a few days). */
+    @PostMapping("/{id}/boost")
+    public BoostService.BoostCheckout boost(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
+        return boostService.start(user.getId(), id);
+    }
+
+    @PostMapping("/boosts/{boostId}/verify")
+    public EquipmentResponse verifyBoost(@AuthenticationPrincipal UserPrincipal user,
+                                         @PathVariable Long boostId,
+                                         @Valid @RequestBody PaymentVerifyRequest request) {
+        return boostService.verify(user.getId(), boostId, request);
     }
 
     @DeleteMapping("/{id}")

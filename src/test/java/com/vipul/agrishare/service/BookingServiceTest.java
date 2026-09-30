@@ -12,6 +12,7 @@ import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.entity.Notification;
 import com.vipul.agrishare.entity.User;
 import com.vipul.agrishare.exception.ApiException;
+import com.vipul.agrishare.payment.EarningsProperties;
 import com.vipul.agrishare.payment.PaymentGateway;
 import com.vipul.agrishare.repository.BookingRepository;
 import com.vipul.agrishare.repository.EquipmentRepository;
@@ -58,7 +59,7 @@ class BookingServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         service = new BookingService(bookingRepository, equipmentRepository, userRepository, paymentGateway,
-                notificationService, reviewRepository, CLOCK);
+                notificationService, reviewRepository, earnings(0), CLOCK);
 
         owner = User.builder().id(1L).name("Gurpreet").phone("9876500001").build();
         renter = User.builder().id(2L).name("Ramesh").phone("9876500002").build();
@@ -74,6 +75,10 @@ class BookingServiceTest {
             return b;
         });
         when(paymentGateway.mode()).thenReturn("mock");
+    }
+
+    private static EarningsProperties earnings(int feePercent) {
+        return new EarningsProperties(BigDecimal.valueOf(feePercent), new BigDecimal("20"), null);
     }
 
     private BookingRequest request(LocalDate start, LocalDate end, PaymentMethod method) {
@@ -262,5 +267,39 @@ class BookingServiceTest {
 
         assertThat(service.expireIfStill(100L, Status.REQUESTED)).isFalse();
         assertThat(b.getStatus()).isEqualTo(Status.CONFIRMED);
+    }
+
+    @Test
+    void onlineFee_isAddedToOnlinePayments_cappedAndCaptured() {
+        service = new BookingService(bookingRepository, equipmentRepository, userRepository, paymentGateway,
+                notificationService, reviewRepository, earnings(2), CLOCK);
+        when(paymentGateway.createOrder(anyLong(), anyString()))
+                .thenReturn(new PaymentGateway.GatewayOrder("order_1", 0, "INR"));
+
+        // 3 days x 1500 = 4500 rent; 2% = 90, capped at 20
+        BookingResponse response = service.create(2L, request(TODAY, TODAY.plusDays(2), PaymentMethod.ONLINE));
+
+        assertThat(response.totalAmount()).isEqualByComparingTo("4500");
+        assertThat(response.platformFee()).isEqualByComparingTo("20");
+        assertThat(response.amountPayable()).isEqualByComparingTo("4520");
+        verify(paymentGateway).createOrder(452000L, "booking_100");
+    }
+
+    @Test
+    void cashBookings_neverPayTheFee() {
+        service = new BookingService(bookingRepository, equipmentRepository, userRepository, paymentGateway,
+                notificationService, reviewRepository, earnings(5), CLOCK);
+
+        BookingResponse response = service.create(2L, request(TODAY, TODAY, PaymentMethod.CASH));
+
+        assertThat(response.platformFee()).isEqualByComparingTo("0");
+        assertThat(response.amountPayable()).isEqualByComparingTo("1500");
+    }
+
+    @Test
+    void smallFee_roundsToWholeRupees() {
+        assertThat(earnings(2).onlineFee(new BigDecimal("150"))).isEqualByComparingTo("3");
+        assertThat(earnings(2).onlineFee(new BigDecimal("125"))).isEqualByComparingTo("3"); // 2.5 -> 3
+        assertThat(earnings(0).onlineFee(new BigDecimal("5000"))).isEqualByComparingTo("0");
     }
 }

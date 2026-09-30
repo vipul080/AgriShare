@@ -1,6 +1,7 @@
-# AgriShare — notes for Claude Code
+# KisanShare (repo/package: agrishare) — notes for Claude Code
 
-Peer-to-peer farm equipment sharing (farmer-to-farmer rentals of tractors,
+App name shown to users: **KisanShare** (renamed from AgriShare on 2026-10-01; Java package,
+DB and repo keep `agrishare`). Peer-to-peer farm equipment sharing (farmer-to-farmer rentals of tractors,
 rotavators, seed drills…) for small/marginal farmers in India. Built for a
 Tata Young Social Innovators submission. Spring Boot backend + web UI served
 by Spring Boot now; Android (Kotlin) client later, calling the same REST API.

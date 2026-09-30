@@ -53,8 +53,14 @@ public class Booking {
     @Column(name = "price_per_day", nullable = false, precision = 10, scale = 2)
     private BigDecimal pricePerDay;
 
+    /** Rent for the owner. */
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
+
+    /** Platform's service fee on ONLINE payments; always zero for cash. */
+    @Column(name = "platform_fee", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal platformFee = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -93,6 +99,11 @@ public class Booking {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    /** What the renter pays: rent plus any online service fee. */
+    public BigDecimal amountPayable() {
+        return totalAmount.add(platformFee);
+    }
 
     public boolean isRenter(Long userId) {
         return renter.getId().equals(userId);

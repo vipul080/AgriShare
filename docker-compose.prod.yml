@@ -1,5 +1,5 @@
 # Production stack for one small server (e.g. Oracle Cloud Always Free):
-#   Postgres + AgriShare + Caddy (automatic HTTPS). Only ports 80/443 are public.
+#   Postgres + KisanShare + Caddy (automatic HTTPS). Only ports 80/443 are public.
 # Start:  docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 services:
   db:

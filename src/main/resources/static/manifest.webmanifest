@@ -1,6 +1,6 @@
 {
-  "name": "AgriShare",
-  "short_name": "AgriShare",
+  "name": "KisanShare",
+  "short_name": "KisanShare",
   "description": "Rent farm machines from farmers near you",
   "start_url": "/",
   "display": "standalone",

@@ -62,6 +62,15 @@ app:
   push:
     # "log" = print pushes to the log; "fcm" = Firebase Cloud Messaging (added with the Android app)
     mode: ${PUSH_MODE:log}
+  # How the platform earns — both OFF by default so farmers aren't put off early on.
+  # Cash bookings are never charged extra; fees are always shown before paying.
+  earnings:
+    online-fee-percent: ${ONLINE_FEE_PERCENT:0}   # e.g. 2 = 2% added to ONLINE payments only
+    online-fee-cap: ${ONLINE_FEE_CAP:20}          # rupees; fee never exceeds this
+    boost:
+      enabled: ${BOOST_ENABLED:false}             # owners may pay to show a machine at the top
+      price: ${BOOST_PRICE:49}
+      days: ${BOOST_DAYS:7}
   payments:
     # "mock" = simulated payments for local/demo use; "razorpay" = real Razorpay (test or live keys)
     mode: ${PAYMENTS_MODE:mock}
