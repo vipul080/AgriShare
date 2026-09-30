@@ -52,8 +52,9 @@ server:
 
 app:
   jwt:
-    # 32+ char secret required for HS256; override via APP_JWT_SECRET env var in real deployments
-    secret: ${APP_JWT_SECRET:this-is-a-placeholder-dev-secret-change-me-please}
+    # 32+ random characters, only ever from the APP_JWT_SECRET env var (the repo is public).
+    # Unset: a random key per start, so local logins just reset when you restart.
+    secret: ${APP_JWT_SECRET:}
     expiration-ms: 604800000   # 7 days — farmers shouldn't need to log in every day
   upload-dir: ${APP_UPLOAD_DIR:./uploads}
   # Sample farmers + machines around Paonta Sahib, only into an empty DB. Keep false in production
