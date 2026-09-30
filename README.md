@@ -26,16 +26,35 @@ submission (Agriculture sector — equipment sharing).
 
 ## Local setup
 
+Either Docker:
+
 ```bash
-# 1. Start Postgres
-docker compose up -d
-
-# 2. Run the app (Flyway migrations run automatically on startup)
-./mvnw spring-boot:run
-
-# 3. API docs
-# http://localhost:8080/swagger-ui.html
+docker compose up -d          # Postgres 16; its default user is a superuser, so extensions just work
 ```
+
+or an existing local Postgres (run once as the `postgres` superuser in psql):
+
+```sql
+CREATE ROLE agrishare LOGIN PASSWORD 'agrishare';
+CREATE DATABASE agrishare OWNER agrishare;
+\c agrishare
+-- earthdistance can only be created by a superuser; the app user then reuses it
+CREATE EXTENSION IF NOT EXISTS cube;
+CREATE EXTENSION IF NOT EXISTS earthdistance;
+```
+
+Then run the app (Flyway applies all migrations on startup):
+
+```bash
+mvn spring-boot:run                 # http://localhost:8080
+PORT=8081 mvn spring-boot:run       # if 8080 is taken (e.g. Oracle XE's listener)
+```
+
+API docs: `/swagger-ui.html`. Payments run in `mock` mode unless `PAYMENTS_MODE=razorpay`
+with `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` set.
+
+**Production databases** (RDS, Railway, Render, Supabase…): run the two `CREATE EXTENSION`
+lines once as the admin user before the first deploy.
 
 ## Architecture
 
