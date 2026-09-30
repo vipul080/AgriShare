@@ -9,3 +9,6 @@ target/
 .env
 uploads/
 backups/
+
+# notes for the AI coding assistant; kept locally, not published
+CLAUDE.md
