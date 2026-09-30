@@ -13,6 +13,7 @@ import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.entity.Notification;
 import com.vipul.agrishare.entity.User;
 import com.vipul.agrishare.exception.ApiException;
+import com.vipul.agrishare.payment.EarningsProperties;
 import com.vipul.agrishare.payment.PaymentGateway;
 import com.vipul.agrishare.repository.BookingRepository;
 import com.vipul.agrishare.repository.EquipmentRepository;
@@ -45,6 +46,7 @@ public class BookingService {
     private final PaymentGateway paymentGateway;
     private final NotificationService notificationService;
     private final ReviewRepository reviewRepository;
+    private final EarningsProperties earnings;
     private final Clock clock;
 
     @Transactional
@@ -106,9 +108,10 @@ public class BookingService {
         } else {
             booking.setStatus(Status.AWAITING_PAYMENT);
             booking.setPaymentStatus(PaymentStatus.PENDING);
+            booking.setPlatformFee(earnings.onlineFee(booking.getTotalAmount())); // online only, 0 when off
             bookingRepository.save(booking); // need the id for the gateway receipt
             PaymentGateway.GatewayOrder order =
-                    paymentGateway.createOrder(toPaise(booking.getTotalAmount()), "booking_" + booking.getId());
+                    paymentGateway.createOrder(toPaise(booking.amountPayable()), "booking_" + booking.getId());
             booking.setGatewayOrderId(order.orderId());
         }
         return toResponse(booking, renterId);
@@ -145,7 +148,7 @@ public class BookingService {
         }
         if (booking.getPaymentMethod() == PaymentMethod.ONLINE) {
             // if capture fails the gateway throws and the transaction rolls back to REQUESTED
-            paymentGateway.capture(booking.getGatewayPaymentId(), toPaise(booking.getTotalAmount()));
+            paymentGateway.capture(booking.getGatewayPaymentId(), toPaise(booking.amountPayable()));
             booking.setPaymentStatus(PaymentStatus.CAPTURED);
         }
         booking.setStatus(Status.CONFIRMED);
@@ -188,7 +191,7 @@ public class BookingService {
         }
 
         if (booking.getPaymentStatus() == PaymentStatus.CAPTURED) {
-            paymentGateway.refund(booking.getGatewayPaymentId(), toPaise(booking.getTotalAmount()));
+            paymentGateway.refund(booking.getGatewayPaymentId(), toPaise(booking.amountPayable()));
             booking.setPaymentStatus(PaymentStatus.REFUNDED);
         } else {
             releaseAuthorization(booking);
@@ -317,7 +320,7 @@ public class BookingService {
         BookingResponse.Checkout checkout = null;
         if (b.getStatus() == Status.AWAITING_PAYMENT && b.isRenter(viewerId)) {
             checkout = new BookingResponse.Checkout(paymentGateway.mode(), paymentGateway.publicKeyId(),
-                    b.getGatewayOrderId(), toPaise(b.getTotalAmount()), "INR");
+                    b.getGatewayOrderId(), toPaise(b.amountPayable()), "INR");
         }
 
         return new BookingResponse(
@@ -331,6 +334,8 @@ public class BookingService {
                 b.getDays(),
                 b.getPricePerDay(),
                 b.getTotalAmount(),
+                b.getPlatformFee(),
+                b.amountPayable(),
                 b.getStatus().name(),
                 b.getPaymentMethod().name(),
                 b.getPaymentStatus().name(),

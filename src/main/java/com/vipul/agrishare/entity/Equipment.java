@@ -58,6 +58,10 @@ public class Equipment {
     @Builder.Default
     private boolean available = true;
 
+    /** Paid "boost": listed first in searches until this moment. */
+    @Column(name = "featured_until")
+    private Instant featuredUntil;
+
     /** Soft delete — keeps history for past bookings and reviews. */
     @Column(nullable = false)
     @Builder.Default

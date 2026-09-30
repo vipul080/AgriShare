@@ -14,6 +14,9 @@ public record EquipmentResponse(
         String address,
         String imageUrl,
         boolean available,
+        /** Boosted by the owner: shown first with a badge. */
+        boolean featured,
+        Instant featuredUntil,
         UserSummary owner,
         Double distanceKm,
         Double averageRating,
