@@ -30,8 +30,8 @@ Play Store target: needs in-app + web account deletion (DELETE /api/users/me, ro
 a public privacy policy page (/privacy, roadmap 9), an FCM `PushSender`, production deploy notes.
 
 Build: no `mvnw` in repo; Maven lives at `~/.m2/wrapper/dists/apache-maven-3.9.16/*/bin/mvn`.
-Unit tests pass. NOT yet run against Postgres (V3/V4 migrations, native/JPQL queries): local Postgres 18
-has no `agrishare` role, Docker Desktop was not up. Do this in roadmap 11 (Testcontainers).
+Local run: Postgres 18 (role/db `agrishare`, extensions created as superuser), `PORT=8081` because
+Oracle's TNSLSNR holds 8080. V1–V5 applied and a 23-step end-to-end smoke test passed (2026-10-01).
 
 ## Remaining roadmap (in order, commit each)
 1. Compile + fix; add `messages.properties` with all `error.*` and `validation.*` keys used in code.
