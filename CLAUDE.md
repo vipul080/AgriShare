@@ -28,6 +28,8 @@ Done (committed + pushed):
   push sent AFTER_COMMIT via `PushSender` (`LoggingPushSender` unless `app.push.mode=fcm`).
 - Roadmap 7: GET/PUT /api/users/me, PUT /me/password, DELETE /me (password-confirmed, blocked by open
   bookings, anonymises the row via V7 `deleted_at`, takes listings down), GET /api/stats/public.
+- Roadmap 8: GET /api/i18n (languages + native names), GET /api/i18n/{lang} (English base overlaid
+  with the language, cached 1 h). UI strings go in the same bundles under `ui.*`.
 - Roadmap 6: V6 two-way reviews (renter->owner+machine, owner->renter); `RatingService` aggregates on read.
 
 Play Store target: in-app account deletion is done (web deletion page still needed with the UI),
