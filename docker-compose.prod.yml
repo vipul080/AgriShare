@@ -1,0 +1,60 @@
+# Production stack for one small server (e.g. Oracle Cloud Always Free):
+#   Postgres + AgriShare + Caddy (automatic HTTPS). Only ports 80/443 are public.
+# Start:  docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agrishare
+      POSTGRES_USER: agrishare
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro   # creates cube/earthdistance on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agrishare -d agrishare"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_NAME: agrishare
+      DB_USERNAME: agrishare
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?set APP_JWT_SECRET in .env}
+      PAYMENTS_MODE: ${PAYMENTS_MODE:-mock}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
+      JAVA_OPTS: ${JAVA_OPTS:--Xmx512m -XX:+ExitOnOutOfMemoryError}
+    volumes:
+      - uploads:/data/uploads
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # HTTPS certificates; keep this volume
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

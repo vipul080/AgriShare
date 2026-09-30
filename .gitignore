@@ -8,3 +8,4 @@ target/
 *.log
 .env
 uploads/
+backups/
