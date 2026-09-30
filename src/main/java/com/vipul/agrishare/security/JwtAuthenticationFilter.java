@@ -42,10 +42,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = authHeader.substring(BEARER_PREFIX.length());
 
         try {
-            String email = jwtService.extractEmail(token);
+            Long userId = jwtService.extractUserId(token);
 
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserById(userId);
 
                 if (jwtService.isTokenValid(token, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken =
@@ -54,8 +54,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException ex) {
-            // Malformed, expired, or tampered token — leave the context unauthenticated
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException
+                 | org.springframework.security.core.userdetails.UsernameNotFoundException ex) {
+            // Malformed, expired, tampered token, or deleted user — leave the context unauthenticated
             // and let Spring Security's entry point return 401, instead of a 500.
             SecurityContextHolder.clearContext();
         }

@@ -12,6 +12,10 @@ import java.util.List;
  * Wraps our User entity for Spring Security, rather than making User itself
  * implement UserDetails — keeps the persistence model decoupled from the
  * security model.
+ *
+ * The "username" is the user's numeric id: users may log in with either email
+ * or phone, and either can change, but the id never does — so it's what the
+ * JWT subject carries.
  */
 public class UserPrincipal implements UserDetails {
 
@@ -41,7 +45,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public String getUsername() {
-        return user.getEmail();
+        return String.valueOf(user.getId());
     }
 
     @Override
