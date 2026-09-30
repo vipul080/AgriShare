@@ -10,6 +10,7 @@ import com.vipul.agrishare.entity.Booking.PaymentMethod;
 import com.vipul.agrishare.entity.Booking.PaymentStatus;
 import com.vipul.agrishare.entity.Booking.Status;
 import com.vipul.agrishare.entity.Equipment;
+import com.vipul.agrishare.entity.Notification;
 import com.vipul.agrishare.entity.User;
 import com.vipul.agrishare.exception.ApiException;
 import com.vipul.agrishare.payment.PaymentGateway;
@@ -39,6 +40,7 @@ public class BookingService {
     private final EquipmentRepository equipmentRepository;
     private final UserRepository userRepository;
     private final PaymentGateway paymentGateway;
+    private final NotificationService notificationService;
     private final Clock clock;
 
     @Transactional
@@ -96,6 +98,7 @@ public class BookingService {
             booking.setPaymentStatus(PaymentStatus.NOT_REQUIRED);
             booking.setRequestedAt(clock.instant());
             bookingRepository.save(booking);
+            notificationService.notify(equipment.getOwner(), Notification.Type.BOOKING_REQUESTED, booking);
         } else {
             booking.setStatus(Status.AWAITING_PAYMENT);
             booking.setPaymentStatus(PaymentStatus.PENDING);
@@ -125,6 +128,7 @@ public class BookingService {
         booking.setPaymentStatus(PaymentStatus.AUTHORIZED);
         booking.setStatus(Status.REQUESTED);
         booking.setRequestedAt(clock.instant());
+        notificationService.notify(booking.getEquipment().getOwner(), Notification.Type.BOOKING_REQUESTED, booking);
         return toResponse(booking, renterId);
     }
 
@@ -141,6 +145,7 @@ public class BookingService {
             booking.setPaymentStatus(PaymentStatus.CAPTURED);
         }
         booking.setStatus(Status.CONFIRMED);
+        notificationService.notify(booking.getRenter(), Notification.Type.BOOKING_CONFIRMED, booking);
         return toResponse(booking, ownerId);
     }
 
@@ -151,6 +156,7 @@ public class BookingService {
         booking.setStatus(Status.REJECTED);
         booking.setRejectReason(StringUtils.hasText(reason) ? reason.trim() : null);
         releaseAuthorization(booking);
+        notificationService.notify(booking.getRenter(), Notification.Type.BOOKING_REJECTED, booking);
         return toResponse(booking, ownerId);
     }
 
@@ -183,7 +189,13 @@ public class BookingService {
         } else {
             releaseAuthorization(booking);
         }
+        Status before = booking.getStatus();
         booking.setStatus(Status.CANCELLED);
+        if (owner) {
+            notificationService.notify(booking.getRenter(), Notification.Type.BOOKING_CANCELLED, booking);
+        } else if (before != Status.AWAITING_PAYMENT) { // owner never saw an unpaid request
+            notificationService.notify(booking.getEquipment().getOwner(), Notification.Type.BOOKING_CANCELLED, booking);
+        }
         return toResponse(booking, userId);
     }
 
@@ -195,6 +207,7 @@ public class BookingService {
             throw ApiException.conflict("error.booking.notStarted");
         }
         booking.setStatus(Status.COMPLETED);
+        notificationService.notify(booking.getRenter(), Notification.Type.BOOKING_COMPLETED, booking);
         return toResponse(booking, ownerId);
     }
 
@@ -241,6 +254,10 @@ public class BookingService {
         }
         booking.setStatus(Status.EXPIRED);
         releaseAuthorization(booking);
+        notificationService.notify(booking.getRenter(), Notification.Type.BOOKING_EXPIRED, booking);
+        if (expected == Status.REQUESTED) {
+            notificationService.notify(booking.getEquipment().getOwner(), Notification.Type.BOOKING_EXPIRED, booking);
+        }
         return true;
     }
 

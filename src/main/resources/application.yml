@@ -48,6 +48,9 @@ app:
   upload-dir: ${APP_UPLOAD_DIR:./uploads}
   # Seeds a few demo farmers + machines around Paonta Sahib when the DB is empty
   demo-data: ${APP_DEMO_DATA:true}
+  push:
+    # "log" = print pushes to the log; "fcm" = Firebase Cloud Messaging (added with the Android app)
+    mode: ${PUSH_MODE:log}
   payments:
     # "mock" = simulated payments for local/demo use; "razorpay" = real Razorpay (test or live keys)
     mode: ${PAYMENTS_MODE:mock}

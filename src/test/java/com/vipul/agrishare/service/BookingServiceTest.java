@@ -9,6 +9,7 @@ import com.vipul.agrishare.entity.Booking.PaymentMethod;
 import com.vipul.agrishare.entity.Booking.PaymentStatus;
 import com.vipul.agrishare.entity.Booking.Status;
 import com.vipul.agrishare.entity.Equipment;
+import com.vipul.agrishare.entity.Notification;
 import com.vipul.agrishare.entity.User;
 import com.vipul.agrishare.exception.ApiException;
 import com.vipul.agrishare.payment.PaymentGateway;
@@ -44,6 +45,7 @@ class BookingServiceTest {
     @Mock private EquipmentRepository equipmentRepository;
     @Mock private UserRepository userRepository;
     @Mock private PaymentGateway paymentGateway;
+    @Mock private NotificationService notificationService;
 
     private BookingService service;
     private User owner;
@@ -53,7 +55,8 @@ class BookingServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service = new BookingService(bookingRepository, equipmentRepository, userRepository, paymentGateway, CLOCK);
+        service = new BookingService(bookingRepository, equipmentRepository, userRepository, paymentGateway,
+                notificationService, CLOCK);
 
         owner = User.builder().id(1L).name("Gurpreet").phone("9876500001").build();
         renter = User.builder().id(2L).name("Ramesh").phone("9876500002").build();
@@ -85,6 +88,7 @@ class BookingServiceTest {
         assertThat(response.totalAmount()).isEqualByComparingTo("4500.00");
         assertThat(response.checkout()).isNull();
         verify(paymentGateway, never()).createOrder(anyLong(), anyString());
+        verify(notificationService).notify(eq(owner), eq(Notification.Type.BOOKING_REQUESTED), any());
     }
 
     @Test
@@ -98,6 +102,7 @@ class BookingServiceTest {
         assertThat(response.status()).isEqualTo("AWAITING_PAYMENT");
         assertThat(response.checkout().orderId()).isEqualTo("order_1");
         assertThat(response.checkout().amountPaise()).isEqualTo(150000L);
+        verifyNoInteractions(notificationService); // owner hears nothing until the renter pays
     }
 
     @Test
@@ -173,6 +178,7 @@ class BookingServiceTest {
         assertThat(b.getPaymentStatus()).isEqualTo(PaymentStatus.CAPTURED);
         assertThat(response.renterPhone()).isEqualTo("9876500002");
         assertThat(response.ownerPhone()).isEqualTo("9876500001");
+        verify(notificationService).notify(renter, Notification.Type.BOOKING_CONFIRMED, b);
     }
 
     @Test
@@ -213,6 +219,7 @@ class BookingServiceTest {
         verify(paymentGateway).refund("pay_1", 300000L);
         assertThat(b.getStatus()).isEqualTo(Status.CANCELLED);
         assertThat(b.getPaymentStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        verify(notificationService).notify(owner, Notification.Type.BOOKING_CANCELLED, b);
     }
 
     @Test
@@ -242,6 +249,8 @@ class BookingServiceTest {
         assertThat(service.expireIfStill(100L, Status.REQUESTED)).isTrue();
         assertThat(b.getStatus()).isEqualTo(Status.EXPIRED);
         assertThat(b.getPaymentStatus()).isEqualTo(PaymentStatus.RELEASED);
+        verify(notificationService).notify(renter, Notification.Type.BOOKING_EXPIRED, b);
+        verify(notificationService).notify(owner, Notification.Type.BOOKING_EXPIRED, b);
     }
 
     @Test

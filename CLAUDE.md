@@ -23,6 +23,11 @@ Done (committed + pushed):
   `MessagesConsistencyTest` fails if any regional bundle drifts from `messages.properties`.
 - Roadmap 2+3: V4 bookings, `BookingService`, `PaymentGateway` (mock default / Razorpay manual capture).
 - Roadmap 4: `BookingExpiryJob` (every 5 min).
+- Roadmap 5: V5 notifications (type + JSONB params), `NotificationText` renders named placeholders,
+  push sent AFTER_COMMIT via `PushSender` (`LoggingPushSender` unless `app.push.mode=fcm`).
+
+Play Store target: needs in-app + web account deletion (DELETE /api/users/me, roadmap 7),
+a public privacy policy page (/privacy, roadmap 9), an FCM `PushSender`, production deploy notes.
 
 Build: no `mvnw` in repo; Maven lives at `~/.m2/wrapper/dists/apache-maven-3.9.16/*/bin/mvn`.
 Unit tests pass. NOT yet run against Postgres (V3/V4 migrations, native/JPQL queries): local Postgres 18
