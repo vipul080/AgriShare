@@ -21,7 +21,7 @@ services:
       - key: APP_JWT_SECRET
         generateValue: true    # random secret, never in git
       - key: PAYMENTS_MODE
-        value: mock            # switch to razorpay + add RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET when ready
+        value: "off"           # cash only; "razorpay" + keys once tested. Never "mock" for real farmers
       - key: APP_DEMO_DATA
         value: "false"         # "true" only for a demo instance
     disk:

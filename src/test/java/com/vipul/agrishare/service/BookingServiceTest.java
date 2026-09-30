@@ -302,4 +302,14 @@ class BookingServiceTest {
         assertThat(earnings(2).onlineFee(new BigDecimal("125"))).isEqualByComparingTo("3"); // 2.5 -> 3
         assertThat(earnings(0).onlineFee(new BigDecimal("5000"))).isEqualByComparingTo("0");
     }
+
+    @Test
+    void onlineBookingRefused_whenPaymentsAreOff() {
+        when(paymentGateway.mode()).thenReturn("off");
+
+        assertThatThrownBy(() -> service.create(2L, request(TODAY, TODAY, PaymentMethod.ONLINE)))
+                .hasMessage("error.payment.disabled");
+        verify(bookingRepository, never()).save(any());
+        verify(paymentGateway, never()).createOrder(anyLong(), anyString());
+    }
 }

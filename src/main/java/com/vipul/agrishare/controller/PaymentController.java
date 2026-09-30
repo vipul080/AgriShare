@@ -31,7 +31,7 @@ public class PaymentController {
         config.put("onlineFeePercent", earnings.onlineFeePercent());
         config.put("onlineFeeCap", earnings.onlineFeeCap());
         config.put("boost", Map.of(
-                "enabled", earnings.boost().enabled(),
+                "enabled", earnings.boost().enabled() && !"off".equals(paymentGateway.mode()),
                 "price", earnings.boost().price(),
                 "days", earnings.boost().days()));
         return config;

@@ -455,7 +455,7 @@ function bookingForm(card, e, booked, takenList) {
             <div class="pay-cards">
                 <label class="pay-card"><input type="radio" name="pay" value="CASH" checked>
                     <span class="emoji">💵</span><b>${t('ui.book.cash')}</b><small>${t('ui.book.cashSub')}</small></label>
-                <label class="pay-card"><input type="radio" name="pay" value="ONLINE">
+                <label class="pay-card" ${payConfig.mode === 'off' ? 'hidden' : ''}><input type="radio" name="pay" value="ONLINE">
                     <span class="emoji">📱</span><b>${t('ui.book.online')}</b><small>${t('ui.book.onlineSub')}</small></label>
             </div>
 

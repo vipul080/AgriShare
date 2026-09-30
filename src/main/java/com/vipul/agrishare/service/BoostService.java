@@ -6,6 +6,7 @@ import com.vipul.agrishare.dto.PaymentVerifyRequest;
 import com.vipul.agrishare.entity.Boost;
 import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.exception.ApiException;
+import com.vipul.agrishare.payment.DisabledPaymentGateway;
 import com.vipul.agrishare.payment.EarningsProperties;
 import com.vipul.agrishare.payment.PaymentGateway;
 import com.vipul.agrishare.repository.BoostRepository;
@@ -38,7 +39,7 @@ public class BoostService {
     @Transactional
     public BoostCheckout start(Long ownerId, Long equipmentId) {
         EarningsProperties.Boost config = earnings.boost();
-        if (!config.enabled()) {
+        if (!config.enabled() || DisabledPaymentGateway.MODE.equals(paymentGateway.mode())) {
             throw ApiException.badRequest("error.boost.disabled");
         }
         Equipment equipment = equipmentService.getOwned(ownerId, equipmentId);
