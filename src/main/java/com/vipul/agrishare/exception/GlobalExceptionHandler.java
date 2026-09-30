@@ -7,6 +7,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -57,6 +58,12 @@ public class GlobalExceptionHandler {
         Map<String, Object> response = body(HttpStatus.BAD_REQUEST, translate("error.validation"), "error.validation");
         response.put("fields", fieldErrors);
         return ResponseEntity.badRequest().body(response);
+    }
+
+    /** Two actions hit the same booking at once (e.g. owner approves as the expiry job runs). */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleConcurrentUpdate(ObjectOptimisticLockingFailureException ex) {
+        return error(HttpStatus.CONFLICT, "error.conflict");
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
