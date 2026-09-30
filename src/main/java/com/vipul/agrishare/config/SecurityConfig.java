@@ -31,7 +31,7 @@ public class SecurityConfig {
 
     /** Web UI shell + static assets + docs. The UI itself calls the API with a Bearer token. */
     private static final String[] PUBLIC_ROUTES = {
-            "/", "/index.html", "/favicon.svg", "/manifest.webmanifest",
+            "/", "/index.html", "/privacy.html", "/favicon.svg", "/manifest.webmanifest",
             "/css/**", "/js/**", "/img/**", "/uploads/**",
             "/api/auth/**",
             "/api/i18n/**",
