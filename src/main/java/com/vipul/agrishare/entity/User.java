@@ -57,6 +57,10 @@ public class User {
     @Column(name = "fcm_token", length = 512)
     private String fcmToken;
 
+    /** Set when the farmer deletes their account; the row stays, anonymised, for others' booking history. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

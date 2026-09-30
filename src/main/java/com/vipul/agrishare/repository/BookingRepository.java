@@ -55,4 +55,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStatusAndRequestedAtBefore(Booking.Status status, Instant cutoff);
 
     long countByStatus(Booking.Status status);
+
+    /** Open bookings on either side block account deletion. */
+    @Query("""
+            select count(b) > 0 from Booking b
+            where b.status in :statuses
+              and (b.renter.id = :userId or b.equipment.owner.id = :userId)
+            """)
+    boolean existsOpenForUser(@Param("userId") Long userId, @Param("statuses") Collection<Booking.Status> statuses);
 }

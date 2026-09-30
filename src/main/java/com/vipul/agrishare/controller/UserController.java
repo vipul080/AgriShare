@@ -1,6 +1,10 @@
 package com.vipul.agrishare.controller;
 
+import com.vipul.agrishare.dto.AccountDeleteRequest;
 import com.vipul.agrishare.dto.FcmTokenRequest;
+import com.vipul.agrishare.dto.PasswordChangeRequest;
+import com.vipul.agrishare.dto.ProfileResponse;
+import com.vipul.agrishare.dto.ProfileUpdateRequest;
 import com.vipul.agrishare.dto.ReviewResponse;
 import com.vipul.agrishare.security.UserPrincipal;
 import com.vipul.agrishare.service.ReviewService;
@@ -18,6 +22,32 @@ public class UserController {
 
     private final UserService userService;
     private final ReviewService reviewService;
+
+    @GetMapping("/me")
+    public ProfileResponse me(@AuthenticationPrincipal UserPrincipal user) {
+        return userService.getProfile(user.getId());
+    }
+
+    @PutMapping("/me")
+    public ProfileResponse updateMe(@AuthenticationPrincipal UserPrincipal user,
+                                    @Valid @RequestBody ProfileUpdateRequest request) {
+        return userService.updateProfile(user.getId(), request);
+    }
+
+    @PutMapping("/me/password")
+    public ResponseEntity<Void> changePassword(@AuthenticationPrincipal UserPrincipal user,
+                                               @Valid @RequestBody PasswordChangeRequest request) {
+        userService.changePassword(user.getId(), request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Google Play requires in-app account deletion. Blocked while bookings are still open. */
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteMe(@AuthenticationPrincipal UserPrincipal user,
+                                         @Valid @RequestBody AccountDeleteRequest request) {
+        userService.deleteAccount(user.getId(), request);
+        return ResponseEntity.noContent().build();
+    }
 
     /** Public: a farmer's reputation, as owner and as renter. */
     @GetMapping("/{id}/reviews")
