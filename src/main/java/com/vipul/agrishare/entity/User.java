@@ -27,7 +27,8 @@ public class User {
     @Column(nullable = false, length = 120)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 160)
+    /** Optional: many small farmers don't use email, so phone is the primary login. */
+    @Column(unique = true, length = 160)
     private String email;
 
     @Column(nullable = false, unique = true, length = 20)
@@ -37,7 +38,7 @@ public class User {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     @Builder.Default
     private Role role = Role.BOTH;
 
@@ -46,6 +47,15 @@ public class User {
     private Double longitude;
 
     private String address;
+
+    /** ISO code of the UI language the farmer picked (en, hi, pa, mr, gu, bn, ta, te, kn). */
+    @Column(name = "preferred_language", nullable = false, length = 8)
+    @Builder.Default
+    private String preferredLanguage = "en";
+
+    /** Firebase Cloud Messaging device token, registered by the Android app. */
+    @Column(name = "fcm_token", length = 512)
+    private String fcmToken;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

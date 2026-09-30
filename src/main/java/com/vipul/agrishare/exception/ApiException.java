@@ -5,33 +5,46 @@ import org.springframework.http.HttpStatus;
 /**
  * Base exception carrying an HTTP status, so GlobalExceptionHandler can map
  * it correctly without a growing if/else chain of instanceof checks.
+ *
+ * The message is an i18n key (e.g. "error.email.exists") resolved against
+ * messages_*.properties in the caller's language by GlobalExceptionHandler.
  */
 public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
+    private final transient Object[] args;
 
-    public ApiException(String message, HttpStatus status) {
-        super(message);
+    public ApiException(String messageKey, HttpStatus status, Object... args) {
+        super(messageKey);
         this.status = status;
+        this.args = args;
     }
 
     public HttpStatus getStatus() {
         return status;
     }
 
-    public static ApiException conflict(String message) {
-        return new ApiException(message, HttpStatus.CONFLICT);
+    public Object[] getArgs() {
+        return args;
     }
 
-    public static ApiException unauthorized(String message) {
-        return new ApiException(message, HttpStatus.UNAUTHORIZED);
+    public static ApiException conflict(String key, Object... args) {
+        return new ApiException(key, HttpStatus.CONFLICT, args);
     }
 
-    public static ApiException notFound(String message) {
-        return new ApiException(message, HttpStatus.NOT_FOUND);
+    public static ApiException unauthorized(String key, Object... args) {
+        return new ApiException(key, HttpStatus.UNAUTHORIZED, args);
     }
 
-    public static ApiException badRequest(String message) {
-        return new ApiException(message, HttpStatus.BAD_REQUEST);
+    public static ApiException forbidden(String key, Object... args) {
+        return new ApiException(key, HttpStatus.FORBIDDEN, args);
+    }
+
+    public static ApiException notFound(String key, Object... args) {
+        return new ApiException(key, HttpStatus.NOT_FOUND, args);
+    }
+
+    public static ApiException badRequest(String key, Object... args) {
+        return new ApiException(key, HttpStatus.BAD_REQUEST, args);
     }
 }

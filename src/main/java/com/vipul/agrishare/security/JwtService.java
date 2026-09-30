@@ -31,20 +31,20 @@ public class JwtService {
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
-                .subject(userDetails.getUsername()) // email
+                .subject(userDetails.getUsername()) // user id
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey)
                 .compact();
     }
 
-    public String extractEmail(String token) {
-        return extractClaim(token, Claims::getSubject);
+    public Long extractUserId(String token) {
+        return Long.valueOf(extractClaim(token, Claims::getSubject));
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        String email = extractEmail(token);
-        return email.equals(userDetails.getUsername()) && !isTokenExpired(token);
+        String subject = extractClaim(token, Claims::getSubject);
+        return subject.equals(userDetails.getUsername()) && !isTokenExpired(token);
     }
 
     private boolean isTokenExpired(String token) {

@@ -1,6 +1,8 @@
 package com.vipul.agrishare.dto;
 
 import com.vipul.agrishare.entity.User;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -8,27 +10,33 @@ import jakarta.validation.constraints.Size;
 
 public record RegisterRequest(
 
-        @NotBlank(message = "Name is required")
+        @NotBlank(message = "{validation.name.required}")
         @Size(max = 120)
         String name,
 
-        @NotBlank(message = "Email is required")
-        @Email(message = "Email must be valid")
+        @Email(message = "{validation.email.invalid}")
+        @Size(max = 160)
         String email,
 
-        @NotBlank(message = "Phone is required")
-        @Pattern(regexp = "^[0-9]{10}$", message = "Phone must be a 10-digit number")
+        @NotBlank(message = "{validation.phone.required}")
+        @Pattern(regexp = "^[6-9][0-9]{9}$", message = "{validation.phone.invalid}")
         String phone,
 
-        @NotBlank(message = "Password is required")
-        @Size(min = 8, message = "Password must be at least 8 characters")
+        @NotBlank(message = "{validation.password.required}")
+        @Size(min = 8, max = 72, message = "{validation.password.size}")
         String password,
 
         User.Role role,
 
+        @DecimalMin("-90") @DecimalMax("90")
         Double latitude,
 
+        @DecimalMin("-180") @DecimalMax("180")
         Double longitude,
 
-        String address
+        @Size(max = 255)
+        String address,
+
+        @Pattern(regexp = "^(en|hi|pa|mr|gu|bn|ta|te|kn)$", message = "{validation.language.invalid}")
+        String preferredLanguage
 ) {}

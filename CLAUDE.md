@@ -1,0 +1,60 @@
+# AgriShare — notes for Claude Code
+
+Peer-to-peer farm equipment sharing (farmer-to-farmer rentals of tractors,
+rotavators, seed drills…) for small/marginal farmers in India. Built for a
+Tata Young Social Innovators submission. Spring Boot backend + web UI served
+by Spring Boot now; Android (Kotlin) client later, calling the same REST API.
+
+## Working agreements
+- Commit + push to GitHub (`origin` = https://github.com/vipul080/AgriShare, branch `main`)
+  after each completed feature, one feature per commit. Author: Vipul <vipulshukla191@gmail.com>.
+- Schema is owned by Flyway (`ddl-auto: validate`). Never edit an applied migration; add a new `V{n}__*.sql`.
+- Money is always `BigDecimal` / `NUMERIC`. Never double/float.
+- Secrets (JWT, Razorpay) only via env vars — never commit them.
+- Error messages are i18n keys (`ApiException.badRequest("error.x")`), resolved in
+  `GlobalExceptionHandler` via `MessageSource` + `Accept-Language`. Every new key must be
+  added to `messages.properties` AND all 8 regional files.
+
+## Status
+Done (committed):
+- JWT auth. Login by phone OR email (`identifier`); JWT subject = user id.
+- V2: `users.role` changed from Postgres ENUM to VARCHAR (Hibernate validate fix).
+
+Written but NOT yet compiled/tested (Maven Central was blocked in the Cowork sandbox):
+- V3 migration: optional email, `preferred_language`, `fcm_token`, `equipment` table + GiST geo index.
+- Equipment entity/repo/specs/service/controller, image upload (`FileStorageService`, served at `/uploads/**`).
+- Radius search via `earthdistance` native query (`EquipmentRepository.searchNearby`).
+- `RatingService` is a stub returning empty ratings until reviews exist.
+- `SecurityConfig`: public GET routes for browsing, 401 entry point, static UI routes.
+- `application.yml`: messages, multipart, upload dir, payments config (mock|razorpay).
+- `GlobalExceptionHandler` expects `src/main/resources/messages.properties` (not created yet).
+**First step: `./mvnw test` (or `mvn test`) and fix any compile errors.**
+
+## Remaining roadmap (in order, commit each)
+1. Compile + fix; add `messages.properties` with all `error.*` and `validation.*` keys used in code.
+   Configure `LocalValidatorFactoryBean.setValidationMessageSource(messageSource)` so `{validation.x}` resolve.
+2. Bookings: statuses AWAITING_PAYMENT → REQUESTED → CONFIRMED / REJECTED / CANCELLED / COMPLETED / EXPIRED.
+   Day-based `start_date`/`end_date` inclusive. On create: `equipmentRepository.findByIdForUpdate`
+   (PESSIMISTIC_WRITE) then overlap check against AWAITING_PAYMENT/REQUESTED/CONFIRMED.
+   Payment method ONLINE (Razorpay) or CASH (skips payment → REQUESTED).
+   Endpoints: POST /api/bookings, POST /{id}/payment/verify, /approve, /reject, /cancel, /complete,
+   GET /mine, GET /incoming, GET /api/equipment/{id}/booked-dates. Show phone numbers to both parties once CONFIRMED.
+3. Payments: `PaymentGateway` interface; `MockPaymentGateway` (default) and `RazorpayGateway`
+   (RestClient, basic auth). Order body: `{"amount": paise, "currency":"INR", "receipt":..., "payment":{"capture":"manual"}}`.
+   Verify signature = HMAC-SHA256(order_id|payment_id, key_secret). Capture on owner approval:
+   POST /v1/payments/{id}/capture. Rejected/expired authorized payments are auto-refunded by Razorpay.
+   `GET /api/payments/config` returns mode + key id for the UI.
+4. Scheduler (@EnableScheduling): expire AWAITING_PAYMENT after 30 min, REQUESTED after 96 h.
+5. In-app notifications table (type + JSON params, translated in UI); `PushSender` interface with a
+   logging impl (FCM later); PUT /api/users/me/fcm-token.
+6. Reviews: 1–5 stars + comment after COMPLETED, one per booking per reviewer; wire `RatingService`
+   to an aggregate query. GET /api/equipment/{id}/reviews, /api/users/{id}/reviews.
+7. Users: GET/PUT /api/users/me (incl. preferredLanguage). GET /api/stats/public for the landing page.
+8. i18n: en, hi, pa, mr, gu, bn, ta, te, kn in `messages_*.properties`; GET /api/i18n/{lang}
+   returns merged key→text JSON for the UI.
+9. Web UI (static SPA in `src/main/resources/static`, vanilla JS, no build step): landing, browse with
+   Leaflet map + radius, equipment detail + booking, dashboard (my bookings / requests / my equipment /
+   notifications), add-equipment with location picker, profile, language switcher with native script
+   names, Noto fonts, big touch targets, earthy green/amber palette, mobile-first.
+10. Demo data seeder (`app.demo-data`) around Paonta Sahib (30.4384, 77.6245) when DB empty.
+11. Integration tests with Testcontainers Postgres (booking overlap/locking, radius search), README update.
