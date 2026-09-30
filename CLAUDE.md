@@ -33,12 +33,18 @@ Done (committed + pushed):
 - Roadmap 9: web UI in `static/` (vanilla ES modules, hash router, Leaflet via cdnjs, Noto per script).
   `dom.js` html`` escapes all interpolations. 174 `ui.*` keys x 9 languages; `UiKeysTest` fails if JS
   uses a key missing from the bundles. Public /privacy.html and #/delete-account (Play Store).
+- Low-literacy UI pass: first-run language tiles, bottom tab bar, picture tiles for machine types,
+  Today/Tomorrow + day stepper booking, status banners with icon + plain sentence, 🔊 read-aloud
+  (speechSynthesis, `{lang}-IN`). i18n + static files served no-cache with ETag (no stale texts).
+- Roadmap 10: `DemoDataSeeder`, opt-in (`APP_DEMO_DATA=true`), 6 farmers / 12 machines, phones 50000000xx.
+- Deploy: `Dockerfile`, `render.yaml` (Render Blueprint), `DEPLOY.md`. DB via DB_URL or DB_HOST/PORT/NAME.
 - Roadmap 6: V6 two-way reviews (renter->owner+machine, owner->renter); `RatingService` aggregates on read.
 
 Play Store target: in-app + web account deletion and privacy policy are done;
 a public privacy policy page (/privacy, roadmap 9), an FCM `PushSender`, production deploy notes.
 
 Build: no `mvnw` in repo; Maven lives at `~/.m2/wrapper/dists/apache-maven-3.9.16/*/bin/mvn`.
+Pushing: user asked (2026-10-01) to commit locally only and NOT push until they say so.
 Local run: Postgres 18 (role/db `agrishare`, extensions created as superuser), `PORT=8081` because
 Oracle's TNSLSNR holds 8080. V1–V5 applied and a 23-step end-to-end smoke test passed (2026-10-01).
 

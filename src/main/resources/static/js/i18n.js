@@ -46,6 +46,34 @@ export async function loadLanguages() {
 
 export const currentLang = () => lang;
 
+/** True once the farmer has picked a language (the first-run screen shows until then). */
+export function hasChosenLang() {
+    return !!storedLang();
+}
+
+/* ---- read aloud: many users read little, so key screens can be listened to ---- */
+export const canSpeak = () => 'speechSynthesis' in window;
+
+export function speak(text, onEnd) {
+    if (!canSpeak()) return;
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = `${lang}-IN`;
+    const voice = speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith(lang));
+    if (voice) utterance.voice = voice;
+    utterance.rate = 0.9; // a little slower is easier to follow
+    utterance.onend = onEnd;
+    utterance.onerror = onEnd;
+    speechSynthesis.speak(utterance);
+}
+
+export function stopSpeaking() {
+    if (canSpeak()) speechSynthesis.cancel();
+}
+
+/** "1 day" / "3 days" in the current language. */
+export const daysText = (n) => (Number(n) === 1 ? t('ui.common.day') : t('ui.common.days', { n }));
+
 /** t('ui.book.total', {days: 3, total: '4,500'}) — fills {named} placeholders. */
 export function t(key, params) {
     let text = messages[key] ?? key;
