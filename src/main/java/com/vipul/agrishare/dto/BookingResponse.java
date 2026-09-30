@@ -24,6 +24,8 @@ public record BookingResponse(
         String ownerPhone,
         /** Present while an ONLINE booking still needs the renter to pay. */
         Checkout checkout,
+        /** COMPLETED and the viewer hasn't reviewed it yet => show "Rate". */
+        boolean reviewedByMe,
         Instant createdAt
 ) {
     public record EquipmentBrief(Long id, String name, String category, String imageUrl, String address) {}

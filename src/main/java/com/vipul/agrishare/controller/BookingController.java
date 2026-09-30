@@ -4,8 +4,11 @@ import com.vipul.agrishare.dto.BookingActionRequest;
 import com.vipul.agrishare.dto.BookingRequest;
 import com.vipul.agrishare.dto.BookingResponse;
 import com.vipul.agrishare.dto.PaymentVerifyRequest;
+import com.vipul.agrishare.dto.ReviewRequest;
+import com.vipul.agrishare.dto.ReviewResponse;
 import com.vipul.agrishare.security.UserPrincipal;
 import com.vipul.agrishare.service.BookingService;
+import com.vipul.agrishare.service.ReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +24,7 @@ import java.util.List;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final ReviewService reviewService;
 
     @PostMapping
     public ResponseEntity<BookingResponse> create(@AuthenticationPrincipal UserPrincipal user,
@@ -67,6 +71,13 @@ public class BookingController {
     @PostMapping("/{id}/cancel")
     public BookingResponse cancel(@AuthenticationPrincipal UserPrincipal user, @PathVariable Long id) {
         return bookingService.cancel(user.getId(), id);
+    }
+
+    @PostMapping("/{id}/review")
+    public ResponseEntity<ReviewResponse> review(@AuthenticationPrincipal UserPrincipal user,
+                                                 @PathVariable Long id,
+                                                 @Valid @RequestBody ReviewRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(reviewService.create(user.getId(), id, request));
     }
 
     @PostMapping("/{id}/complete")

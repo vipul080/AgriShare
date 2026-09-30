@@ -15,6 +15,7 @@ import com.vipul.agrishare.exception.ApiException;
 import com.vipul.agrishare.payment.PaymentGateway;
 import com.vipul.agrishare.repository.BookingRepository;
 import com.vipul.agrishare.repository.EquipmentRepository;
+import com.vipul.agrishare.repository.ReviewRepository;
 import com.vipul.agrishare.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class BookingServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private PaymentGateway paymentGateway;
     @Mock private NotificationService notificationService;
+    @Mock private ReviewRepository reviewRepository;
 
     private BookingService service;
     private User owner;
@@ -56,7 +58,7 @@ class BookingServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         service = new BookingService(bookingRepository, equipmentRepository, userRepository, paymentGateway,
-                notificationService, CLOCK);
+                notificationService, reviewRepository, CLOCK);
 
         owner = User.builder().id(1L).name("Gurpreet").phone("9876500001").build();
         renter = User.builder().id(2L).name("Ramesh").phone("9876500002").build();
