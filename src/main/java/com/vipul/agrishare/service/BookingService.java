@@ -13,6 +13,7 @@ import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.entity.Notification;
 import com.vipul.agrishare.entity.User;
 import com.vipul.agrishare.exception.ApiException;
+import com.vipul.agrishare.payment.DisabledPaymentGateway;
 import com.vipul.agrishare.payment.EarningsProperties;
 import com.vipul.agrishare.payment.PaymentGateway;
 import com.vipul.agrishare.repository.BookingRepository;
@@ -67,6 +68,9 @@ public class BookingService {
         }
         if (start.isAfter(today.plusDays(MAX_DAYS_AHEAD))) {
             throw ApiException.badRequest("error.booking.tooFarAhead", MAX_DAYS_AHEAD);
+        }
+        if (request.paymentMethod() == PaymentMethod.ONLINE && !onlinePaymentsEnabled()) {
+            throw ApiException.badRequest("error.payment.disabled");
         }
 
         // Row lock on the machine: concurrent requests for it queue here, so the
@@ -262,6 +266,10 @@ public class BookingService {
             notificationService.notify(booking.getEquipment().getOwner(), Notification.Type.BOOKING_EXPIRED, booking);
         }
         return true;
+    }
+
+    private boolean onlinePaymentsEnabled() {
+        return !DisabledPaymentGateway.MODE.equals(paymentGateway.mode());
     }
 
     /** Authorized-but-uncaptured money is returned by the gateway on its own; just record that. */

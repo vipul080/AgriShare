@@ -72,7 +72,9 @@ app:
       price: ${BOOST_PRICE:49}
       days: ${BOOST_DAYS:7}
   payments:
-    # "mock" = simulated payments for local/demo use; "razorpay" = real Razorpay (test or live keys)
+    # "off" = cash only (use this in production until Razorpay is set up and tested)
+    # "mock" = pretend payments for local development and demos ONLY - never for real farmers
+    # "razorpay" = real Razorpay (test keys first, live keys after approval)
     mode: ${PAYMENTS_MODE:mock}
     razorpay:
       key-id: ${RAZORPAY_KEY_ID:}
