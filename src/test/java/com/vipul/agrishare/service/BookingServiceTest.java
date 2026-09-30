@@ -233,4 +233,23 @@ class BookingServiceTest {
         service.complete(1L, 100L);
         assertThat(b.getStatus()).isEqualTo(Status.COMPLETED);
     }
+
+    @Test
+    void expireIfStill_expiresAndReleasesAuthorization() {
+        Booking b = existing(Status.REQUESTED, PaymentMethod.ONLINE, PaymentStatus.AUTHORIZED);
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(b));
+
+        assertThat(service.expireIfStill(100L, Status.REQUESTED)).isTrue();
+        assertThat(b.getStatus()).isEqualTo(Status.EXPIRED);
+        assertThat(b.getPaymentStatus()).isEqualTo(PaymentStatus.RELEASED);
+    }
+
+    @Test
+    void expireIfStill_leavesBookingAlone_whenOwnerAlreadyActed() {
+        Booking b = existing(Status.CONFIRMED, PaymentMethod.ONLINE, PaymentStatus.CAPTURED);
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(b));
+
+        assertThat(service.expireIfStill(100L, Status.REQUESTED)).isFalse();
+        assertThat(b.getStatus()).isEqualTo(Status.CONFIRMED);
+    }
 }

@@ -16,19 +16,17 @@ by Spring Boot now; Android (Kotlin) client later, calling the same REST API.
   added to `messages.properties` AND all 8 regional files.
 
 ## Status
-Done (committed):
+Done (committed + pushed):
 - JWT auth. Login by phone OR email (`identifier`); JWT subject = user id.
 - V2: `users.role` changed from Postgres ENUM to VARCHAR (Hibernate validate fix).
+- V3 equipment + radius search, image upload. i18n bundles (9 languages) + validator wired to MessageSource;
+  `MessagesConsistencyTest` fails if any regional bundle drifts from `messages.properties`.
+- Roadmap 2+3: V4 bookings, `BookingService`, `PaymentGateway` (mock default / Razorpay manual capture).
+- Roadmap 4: `BookingExpiryJob` (every 5 min).
 
-Written but NOT yet compiled/tested (Maven Central was blocked in the Cowork sandbox):
-- V3 migration: optional email, `preferred_language`, `fcm_token`, `equipment` table + GiST geo index.
-- Equipment entity/repo/specs/service/controller, image upload (`FileStorageService`, served at `/uploads/**`).
-- Radius search via `earthdistance` native query (`EquipmentRepository.searchNearby`).
-- `RatingService` is a stub returning empty ratings until reviews exist.
-- `SecurityConfig`: public GET routes for browsing, 401 entry point, static UI routes.
-- `application.yml`: messages, multipart, upload dir, payments config (mock|razorpay).
-- `GlobalExceptionHandler` expects `src/main/resources/messages.properties` (not created yet).
-**First step: `./mvnw test` (or `mvn test`) and fix any compile errors.**
+Build: no `mvnw` in repo; Maven lives at `~/.m2/wrapper/dists/apache-maven-3.9.16/*/bin/mvn`.
+Unit tests pass. NOT yet run against Postgres (V3/V4 migrations, native/JPQL queries): local Postgres 18
+has no `agrishare` role, Docker Desktop was not up. Do this in roadmap 11 (Testcontainers).
 
 ## Remaining roadmap (in order, commit each)
 1. Compile + fix; add `messages.properties` with all `error.*` and `validation.*` keys used in code.
