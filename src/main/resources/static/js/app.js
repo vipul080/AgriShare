@@ -114,6 +114,7 @@ function renderFooter() {
     mount($('#footer'), html`
         <div>${t('ui.footer.made')}</div>
         <div style="margin-top:6px">
+            <a href="/terms.html">${t('ui.footer.terms')}</a>
             <a href="/privacy.html">${t('ui.footer.privacy')}</a>
             <a href="#/delete-account">${t('ui.footer.deleteAccount')}</a>
         </div>`);

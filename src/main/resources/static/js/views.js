@@ -680,6 +680,9 @@ export async function register(main) {
                 </div>
                 <details class="field"><summary class="muted">✉️ ${t('ui.auth.email')}</summary>
                     <input id="email" name="email" type="email" autocomplete="email" style="margin-top:8px"></details>
+                <p class="small muted">${t('ui.auth.agree')}
+                    <a href="/terms.html" target="_blank" rel="noopener">${t('ui.footer.terms')}</a> ·
+                    <a href="/privacy.html" target="_blank" rel="noopener">${t('ui.footer.privacy')}</a></p>
                 <button class="btn primary block" type="submit" style="min-height:56px">✅ ${t('ui.auth.register')}</button>
             </form>
             <a class="btn block" href="#/login" style="margin-top:14px">${t('ui.auth.haveAccount')}</a>
