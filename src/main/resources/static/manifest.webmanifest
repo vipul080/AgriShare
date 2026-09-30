@@ -1,0 +1,12 @@
+{
+  "name": "AgriShare",
+  "short_name": "AgriShare",
+  "description": "Rent farm machines from farmers near you",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf6ec",
+  "theme_color": "#2f6b3a",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

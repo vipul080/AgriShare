@@ -30,9 +30,12 @@ Done (committed + pushed):
   bookings, anonymises the row via V7 `deleted_at`, takes listings down), GET /api/stats/public.
 - Roadmap 8: GET /api/i18n (languages + native names), GET /api/i18n/{lang} (English base overlaid
   with the language, cached 1 h). UI strings go in the same bundles under `ui.*`.
+- Roadmap 9: web UI in `static/` (vanilla ES modules, hash router, Leaflet via cdnjs, Noto per script).
+  `dom.js` html`` escapes all interpolations. 174 `ui.*` keys x 9 languages; `UiKeysTest` fails if JS
+  uses a key missing from the bundles. Public /privacy.html and #/delete-account (Play Store).
 - Roadmap 6: V6 two-way reviews (renter->owner+machine, owner->renter); `RatingService` aggregates on read.
 
-Play Store target: in-app account deletion is done (web deletion page still needed with the UI),
+Play Store target: in-app + web account deletion and privacy policy are done;
 a public privacy policy page (/privacy, roadmap 9), an FCM `PushSender`, production deploy notes.
 
 Build: no `mvnw` in repo; Maven lives at `~/.m2/wrapper/dists/apache-maven-3.9.16/*/bin/mvn`.
