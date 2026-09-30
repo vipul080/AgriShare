@@ -31,6 +31,7 @@ public class CustomUserDetailsService implements UserDetailsService {
      */
     public UserDetails loadUserById(Long id) {
         return userRepository.findById(id)
+                .filter(user -> user.getDeletedAt() == null) // tokens of deleted accounts stop working at once
                 .map(UserPrincipal::new)
                 .orElseThrow(() -> new UsernameNotFoundException("No user found with id " + id));
     }

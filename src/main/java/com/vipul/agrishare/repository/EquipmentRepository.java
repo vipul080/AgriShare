@@ -36,6 +36,8 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>, Jpa
 
     long countByActiveTrue();
 
+    List<Equipment> findByOwnerIdAndActiveTrue(Long ownerId);
+
     /**
      * Radius search using Postgres cube + earthdistance.
      * earth_box(...) @> ll_to_earth(...) is a fast, index-assisted bounding-box

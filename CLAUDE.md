@@ -6,6 +6,7 @@ Tata Young Social Innovators submission. Spring Boot backend + web UI served
 by Spring Boot now; Android (Kotlin) client later, calling the same REST API.
 
 ## Working agreements
+- Never add a `Co-Authored-By: Claude` (or any AI attribution) trailer to commits.
 - Commit + push to GitHub (`origin` = https://github.com/vipul080/AgriShare, branch `main`)
   after each completed feature, one feature per commit. Author: Vipul <vipulshukla191@gmail.com>.
 - Schema is owned by Flyway (`ddl-auto: validate`). Never edit an applied migration; add a new `V{n}__*.sql`.
@@ -25,9 +26,11 @@ Done (committed + pushed):
 - Roadmap 4: `BookingExpiryJob` (every 5 min).
 - Roadmap 5: V5 notifications (type + JSONB params), `NotificationText` renders named placeholders,
   push sent AFTER_COMMIT via `PushSender` (`LoggingPushSender` unless `app.push.mode=fcm`).
+- Roadmap 7: GET/PUT /api/users/me, PUT /me/password, DELETE /me (password-confirmed, blocked by open
+  bookings, anonymises the row via V7 `deleted_at`, takes listings down), GET /api/stats/public.
 - Roadmap 6: V6 two-way reviews (renter->owner+machine, owner->renter); `RatingService` aggregates on read.
 
-Play Store target: needs in-app + web account deletion (DELETE /api/users/me, roadmap 7),
+Play Store target: in-app account deletion is done (web deletion page still needed with the UI),
 a public privacy policy page (/privacy, roadmap 9), an FCM `PushSender`, production deploy notes.
 
 Build: no `mvnw` in repo; Maven lives at `~/.m2/wrapper/dists/apache-maven-3.9.16/*/bin/mvn`.
