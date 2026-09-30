@@ -204,3 +204,115 @@ input[type=checkbox], input[type=radio] { width: 24px; min-height: 24px; height:
 .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
 .prose { max-width: 760px; }
 .prose h2 { margin-top: 1.4em; }
+
+/* =====================================================================
+   Low-literacy pass: bigger type, icon-first navigation, picture tiles.
+   ===================================================================== */
+body { font-size: 18px; padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+.lang-btn {
+    margin-left: auto; min-height: 44px; padding: 6px 14px; border-radius: 999px; border: 2px solid rgba(255,255,255,.6);
+    background: rgba(255,255,255,.12); color: #fff; font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer;
+}
+
+/* bottom tab bar, same pattern as WhatsApp and PhonePe */
+.tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; display: flex;
+    background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(0,0,0,.06);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar a {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 66px; color: var(--muted); text-decoration: none; font-size: .85rem; font-weight: 600; position: relative;
+}
+.tabbar a .ic { font-size: 1.7rem; line-height: 1; }
+.tabbar a.active { color: var(--green); }
+.tabbar a.active::before { content: ""; position: absolute; top: 0; left: 25%; right: 25%; height: 4px; border-radius: 0 0 4px 4px; background: var(--green); }
+.tabbar .badge-dot { top: 6px; right: calc(50% - 26px); }
+@media (min-width: 900px) { .tabbar { max-width: 640px; margin: 0 auto 12px; border: 1px solid var(--line); border-radius: 18px; } }
+
+/* language picker */
+.lang-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (min-width: 640px) { .lang-grid { grid-template-columns: repeat(3, 1fr); } }
+.lang-tile {
+    min-height: 84px; border-radius: 16px; border: 3px solid var(--line); background: #fff; cursor: pointer;
+    font: inherit; font-size: 1.45rem; font-weight: 700; color: var(--text); padding: 10px;
+}
+.lang-tile.active, .lang-tile:hover { border-color: var(--green); background: var(--green-soft); }
+
+/* home: two giant choices */
+.big-choice {
+    display: flex; align-items: center; gap: 16px; padding: 22px 18px; border-radius: 20px; text-decoration: none;
+    color: #fff; min-height: 120px; box-shadow: 0 4px 14px rgba(0,0,0,.12);
+}
+.big-choice .emoji { font-size: 3.4rem; line-height: 1; flex: none; }
+.big-choice b { display: block; font-size: 1.4rem; line-height: 1.2; }
+.big-choice span { opacity: .92; font-size: 1rem; }
+.big-choice.need { background: linear-gradient(135deg, #2f6b3a, #4c8a3f); }
+.big-choice.have { background: linear-gradient(135deg, #b8801a, #e0a526); color: #2a2418; }
+
+/* read-aloud button */
+.speak {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 14px; border-radius: 999px;
+    border: 2px solid var(--green); background: #fff; color: var(--green); font: inherit; font-size: .95rem; font-weight: 700; cursor: pointer;
+}
+.speak.speaking { background: var(--green); color: #fff; }
+.title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.title-row h1, .title-row h2 { margin: 0; flex: 1; min-width: 60%; }
+
+/* picture tiles for machine types */
+.cat-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x proximity; }
+.cat-tile {
+    flex: none; width: 92px; min-height: 96px; scroll-snap-align: start; border-radius: 16px; border: 3px solid var(--line);
+    background: #fff; cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; color: var(--text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; text-align: center;
+}
+.cat-tile .emoji { font-size: 2.1rem; line-height: 1; }
+.cat-tile.active { border-color: var(--green); background: var(--green-soft); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+    min-height: 48px; padding: 8px 16px; border-radius: 999px; border: 2px solid var(--line); background: #fff;
+    font: inherit; font-weight: 700; cursor: pointer; color: var(--text);
+}
+.chip.active { border-color: var(--green); background: var(--green); color: #fff; }
+.eq-card .price { font-size: 1.3rem; }
+.dist { font-weight: 700; color: var(--green-dark); }
+
+/* booking form */
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button {
+    width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--green); background: #fff; color: var(--green);
+    font-size: 2rem; font-weight: 700; cursor: pointer; line-height: 1;
+}
+.stepper output { font-size: 1.5rem; font-weight: 700; min-width: 110px; text-align: center; }
+.pay-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pay-card { position: relative; border: 3px solid var(--line); border-radius: 16px; padding: 14px 10px; text-align: center; cursor: pointer; background: #fff; font-weight: 400; }
+.pay-card input { position: absolute; opacity: 0; pointer-events: none; }
+.pay-card .emoji { font-size: 2.4rem; display: block; }
+.pay-card b { display: block; font-size: 1.05rem; }
+.pay-card small { color: var(--muted); font-size: .82rem; line-height: 1.3; display: block; margin-top: 2px; }
+.pay-card:has(input:checked) { border-color: var(--green); background: var(--green-soft); }
+.total-box { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px; border-radius: 14px; background: var(--amber-soft); margin: 14px 0; }
+.total-box b { font-size: 1.7rem; color: var(--soil); }
+.warn { padding: 12px 14px; border-radius: 12px; background: var(--red-soft); color: var(--red); font-weight: 600; margin-top: 10px; }
+
+/* status banner: colour + icon + one plain sentence */
+.status-banner { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; margin-bottom: 12px; }
+.status-banner .emoji { font-size: 2rem; line-height: 1; }
+.status-banner b { display: block; font-size: 1.1rem; }
+.status-banner span { font-size: .95rem; }
+.status-banner.amber { background: var(--amber-soft); color: #6b4a00; }
+.status-banner.green { background: var(--green-soft); color: var(--green-dark); }
+.status-banner.red { background: var(--red-soft); color: var(--red); }
+.status-banner.grey { background: #eee9de; color: var(--muted); }
+.status-banner.blue { background: var(--blue-soft); color: #1f4f7a; }
+.call-btn { background: #1f8a3b; border-color: #1f8a3b; color: #fff; font-size: 1.15rem; min-height: 56px; }
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 90px; }
+.pw-wrap button { position: absolute; right: 6px; top: 6px; bottom: 6px; border: 0; background: var(--green-soft); color: var(--green-dark); border-radius: 8px; padding: 0 12px; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* three small counters side by side, even on phones */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats .stat { padding: 10px 6px; font-size: .85rem; line-height: 1.25; }
+.stats .stat b { font-size: 1.35rem; }
+.chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+.chips.scroll .chip { flex: none; min-height: 44px; padding: 6px 14px; }

@@ -1,0 +1,37 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo. Creates the app + Postgres.
+# Plan names/prices change; adjust in the dashboard if Render rejects one.
+services:
+  - type: web
+    name: agrishare
+    runtime: docker
+    region: singapore          # closest Render region to India
+    plan: starter              # free plan sleeps after 15 min idle (first open then takes ~1 min) and has no disk
+    healthCheckPath: /api/stats/public
+    envVars:
+      - key: DB_HOST
+        fromDatabase: { name: agrishare-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: agrishare-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: agrishare-db, property: database }
+      - key: DB_USERNAME
+        fromDatabase: { name: agrishare-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: agrishare-db, property: password }
+      - key: APP_JWT_SECRET
+        generateValue: true    # random secret, never in git
+      - key: PAYMENTS_MODE
+        value: mock            # switch to razorpay + add RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET when ready
+      - key: APP_DEMO_DATA
+        value: "false"         # "true" only for a demo instance
+    disk:
+      name: uploads            # machine photos survive redeploys
+      mountPath: /data/uploads
+      sizeGB: 1
+
+databases:
+  - name: agrishare-db
+    databaseName: agrishare
+    user: agrishare
+    region: singapore
+    plan: basic-256mb

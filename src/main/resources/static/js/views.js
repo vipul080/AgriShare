@@ -1,17 +1,25 @@
 import { html, mount, $, $$, toast, openModal, closeModal, formData, showFieldErrors } from './dom.js';
-import { t, money, date, dateTime, setLang, currentLang } from './i18n.js';
+import { t, money, date, dateTime, setLang, currentLang, canSpeak, speak, stopSpeaking, daysText } from './i18n.js';
 import { session, get, post, put, del, ApiError } from './api.js';
-import { renderNav, refreshUnread } from './app.js';
+import { renderNav, refreshUnread, chooseLanguage } from './app.js';
 
-const HOME = { lat: 30.4384, lng: 77.6245 }; // Paonta Sahib — default map centre
+// Designed for farmers who may read little: every action has an icon, statuses have
+// colours, key screens can be read aloud, and choices are big tiles instead of dropdowns.
+
+const HOME = { lat: 30.4384, lng: 77.6245 }; // Paonta Sahib, the default map centre
 const ICONS = {
-    TRACTOR: '🚜', ROTAVATOR: '⚙️', CULTIVATOR: '🌱', PLOUGH: '🪨', SEED_DRILL: '🌾', HARVESTER: '🌾',
-    THRESHER: '🌾', SPRAYER: '💧', WATER_PUMP: '🚰', POWER_TILLER: '🚜', TROLLEY: '🛻', OTHER: '🔧',
+    TRACTOR: '🚜', ROTAVATOR: '⚙️', CULTIVATOR: '🔱', PLOUGH: '🐂', SEED_DRILL: '🌱', HARVESTER: '🌾',
+    THRESHER: '🌀', SPRAYER: '💦', WATER_PUMP: '🚰', POWER_TILLER: '🛞', TROLLEY: '🛻', OTHER: '🔧',
 };
-const STATUS_PILL = {
-    AWAITING_PAYMENT: 'amber', REQUESTED: 'amber', CONFIRMED: '', REJECTED: 'red',
-    CANCELLED: 'grey', COMPLETED: 'blue', EXPIRED: 'grey',
+const STATUS = {
+    AWAITING_PAYMENT: ['💳', 'amber'], REQUESTED: ['⏳', 'amber'], CONFIRMED: ['✅', 'green'],
+    REJECTED: ['❌', 'red'], CANCELLED: ['🚫', 'grey'], COMPLETED: ['🏁', 'blue'], EXPIRED: ['⌛', 'grey'],
 };
+const NOTIFICATION_ICONS = {
+    BOOKING_REQUESTED: '📥', BOOKING_CONFIRMED: '✅', BOOKING_REJECTED: '❌',
+    BOOKING_CANCELLED: '🚫', BOOKING_COMPLETED: '⭐', BOOKING_EXPIRED: '⌛',
+};
+const MAX_DAYS = 30;
 
 let languages = [];
 let categories = [];
@@ -24,13 +32,14 @@ export const cachedLanguages = () => languages;
 
 /* ---------------------------------------------------------------- helpers */
 
-function today() {
-    const d = new Date();
+function isoDate(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-
-function daysBetween(start, end) {
-    return Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86_400_000) + 1;
+const today = () => isoDate(new Date());
+function addDays(iso, n) {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return isoDate(d);
 }
 
 function errorText(e) {
@@ -58,10 +67,37 @@ function stars(avg, count) {
     return html`<span class="stars">★</span> ${t('ui.equipment.rating', { avg: avg.toFixed(1), count })}`;
 }
 
-function categoryOptions(selected, placeholderKey) {
-    return html`
-        ${placeholderKey ? html`<option value="">${t(placeholderKey)}</option>` : ''}
-        ${categories.map((c) => html`<option value="${c}" ${c === selected ? 'selected' : ''}>${t('ui.category.' + c)}</option>`)}`;
+/** 🔊 button; the text to read is kept on the button itself. */
+function speakButton(text) {
+    if (!canSpeak()) return '';
+    return html`<button type="button" class="speak" data-say="${text}">🔊 ${t('ui.speak')}</button>`;
+}
+
+document.addEventListener('click', (e) => {
+    const button = e.target.closest('.speak');
+    if (!button) return;
+    if (button.classList.contains('speaking')) {
+        stopSpeaking();
+        button.classList.remove('speaking');
+        return;
+    }
+    $$('.speak.speaking').forEach((b) => b.classList.remove('speaking'));
+    button.classList.add('speaking');
+    speak(button.dataset.say, () => button.classList.remove('speaking'));
+});
+
+/** On-screen yes/no with big buttons (browser confirm() boxes are tiny and look foreign). */
+function confirmDialog(message, okKey, danger = false) {
+    return new Promise((resolve) => {
+        const dialog = openModal(html`
+            <h2>${message}</h2>
+            <div class="row" style="margin-top:16px">
+                <button class="btn ${danger ? 'danger solid' : 'primary'}" id="yes">${t(okKey || 'ui.common.yes')}</button>
+                <button class="btn" id="no">${t('ui.common.no')}</button>
+            </div>`);
+        $('#yes', dialog).onclick = () => { closeModal(); resolve(true); };
+        $('#no', dialog).onclick = () => { closeModal(); resolve(false); };
+    });
 }
 
 function locate() {
@@ -83,36 +119,71 @@ function makeMap(el, center, zoom = 11) {
     return map;
 }
 
+function escapeText(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function passwordField(id, name, autocomplete, labelHtml) {
+    return html`
+        <div class="field"><label for="${id}">${labelHtml}</label>
+            <div class="pw-wrap">
+                <input id="${id}" name="${name}" type="password" autocomplete="${autocomplete}">
+                <button type="button" class="pw-toggle" data-for="${id}">👁 ${t('ui.auth.show')}</button>
+            </div>
+        </div>`;
+}
+
+document.addEventListener('click', (e) => {
+    const toggle = e.target.closest('.pw-toggle');
+    if (!toggle) return;
+    const input = document.getElementById(toggle.dataset.for);
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    toggle.textContent = `${show ? '🙈' : '👁'} ${t(show ? 'ui.auth.hide' : 'ui.auth.show')}`;
+});
+
 function goAfterLogin() {
     const next = sessionStorage.getItem('agrishare.after-login');
     sessionStorage.removeItem('agrishare.after-login');
-    location.hash = next || '#/browse';
+    location.hash = next || '#/';
 }
 
 /* ---------------------------------------------------------------- home */
 
 export async function home(main) {
     const stats = await get('/api/stats/public').catch(() => null);
+    const steps = [['🔍', 1], ['📅', 2], ['🤝', 3]];
+    const howText = steps.map(([, n]) => `${t(`ui.home.step${n}.title`)}. ${t(`ui.home.step${n}.text`)}`).join(' ');
+    const name = session.user?.name;
+
     mount(main, html`
-        <section class="hero">
-            <h1>${t('ui.home.title')}</h1>
-            <p>${t('ui.home.subtitle')}</p>
-            <div class="row">
-                <a class="btn amber" href="#/browse">🔍 ${t('ui.home.find')}</a>
-                <a class="btn" href="#/equipment/new">🚜 ${t('ui.home.list')}</a>
-            </div>
-        </section>
-        ${stats ? html`
-        <section class="grid three" style="margin-bottom:18px">
-            <div class="card stat"><b>${stats.farmers}</b>${t('ui.home.stats.farmers')}</div>
-            <div class="card stat"><b>${stats.machines}</b>${t('ui.home.stats.machines')}</div>
-            <div class="card stat"><b>${stats.completedRentals}</b>${t('ui.home.stats.rentals')}</div>
+        <div class="title-row">
+            <h1>${name ? t('ui.home.hello', { name }) : t('ui.home.title')}</h1>
+            ${speakButton(`${t('ui.home.need')}. ${t('ui.home.needSub')}. ${t('ui.home.have')}. ${t('ui.home.haveSub')}.`)}
+        </div>
+        <div class="grid two" style="margin-bottom:18px">
+            <a class="big-choice need" href="#/browse">
+                <span class="emoji">🚜</span>
+                <div><b>${t('ui.home.need')}</b><span>${t('ui.home.needSub')}</span></div>
+            </a>
+            <a class="big-choice have" href="#/equipment/new">
+                <span class="emoji">💰</span>
+                <div><b>${t('ui.home.have')}</b><span>${t('ui.home.haveSub')}</span></div>
+            </a>
+        </div>
+        ${stats && stats.machines > 0 ? html`
+        <section class="stats" style="margin-bottom:18px">
+            <div class="card stat"><b>👨‍🌾 ${stats.farmers}</b>${t('ui.home.stats.farmers')}</div>
+            <div class="card stat"><b>🚜 ${stats.machines}</b>${t('ui.home.stats.machines')}</div>
+            <div class="card stat"><b>🤝 ${stats.completedRentals}</b>${t('ui.home.stats.rentals')}</div>
         </section>` : ''}
-        <h2>${t('ui.home.how')}</h2>
+        <div class="title-row"><h2>${t('ui.home.how')}</h2>${speakButton(howText)}</div>
         <section class="grid three">
-            ${[1, 2, 3].map((n) => html`
+            ${steps.map(([emoji, n]) => html`
                 <div class="card">
-                    <div class="step-num">${n}</div>
+                    <div class="row"><span style="font-size:2.4rem">${emoji}</span><span class="step-num">${n}</span></div>
                     <h3>${t(`ui.home.step${n}.title`)}</h3>
                     <p class="muted">${t(`ui.home.step${n}.text`)}</p>
                 </div>`)}
@@ -121,36 +192,58 @@ export async function home(main) {
 
 /* ---------------------------------------------------------------- browse */
 
-const search = { lat: null, lng: null, radiusKm: 25, category: '', q: '' };
+const search = { lat: null, lng: null, radiusKm: 25, category: '', q: '', showMap: false };
 
 export async function browse(main) {
     mount(main, html`
-        <h1>${t('ui.nav.browse')}</h1>
-        <form id="filters" class="filters">
-            <button type="button" id="near-me" class="btn primary wide">📍 ${t('ui.browse.useLocation')}</button>
-            <div>
-                <label for="radius">${t('ui.browse.radius')}</label>
-                <select id="radius" name="radiusKm">
-                    ${[5, 10, 25, 50, 100].map((km) => html`<option value="${km}" ${km === search.radiusKm ? 'selected' : ''}>${t('ui.browse.km', { n: km })}</option>`)}
-                </select>
+        <div class="title-row"><h1>${t('ui.nav.find')}</h1><span id="browse-speak"></span></div>
+        <div class="cat-strip" id="cats">
+            <button type="button" class="cat-tile ${search.category ? '' : 'active'}" data-cat=""><span class="emoji">🧰</span>${t('ui.browse.all')}</button>
+            ${categories.map((c) => html`
+                <button type="button" class="cat-tile ${c === search.category ? 'active' : ''}" data-cat="${c}">
+                    <span class="emoji">${ICONS[c]}</span>${t('ui.category.' + c)}</button>`)}
+        </div>
+        <div class="card" style="margin-bottom:12px">
+            <div id="where" class="row" style="margin-bottom:10px"></div>
+            <div class="chips scroll" id="radius">
+                ${[5, 10, 25, 50].map((km) => html`<button type="button" class="chip ${km === search.radiusKm ? 'active' : ''}" data-km="${km}">📍 ${t('ui.browse.km', { n: km })}</button>`)}
             </div>
-            <div>
-                <label for="category">${t('ui.form.category')}</label>
-                <select id="category" name="category">${categoryOptions(search.category, 'ui.browse.allCategories')}</select>
-            </div>
-            <div class="wide">
-                <label for="q">${t('ui.browse.search')}</label>
-                <input id="q" name="q" type="search" value="${search.q}" placeholder="${t('ui.browse.searchPlaceholder')}">
-            </div>
-            <button class="btn wide" type="submit">${t('ui.browse.searchButton')}</button>
-        </form>
-        <div id="map" class="map" style="margin-bottom:12px"></div>
-        <p id="result-line" class="muted"></p>
+            <form id="search-form" class="row" style="margin-top:10px">
+                <input name="q" type="search" value="${search.q}" placeholder="🔍 ${t('ui.browse.searchPlaceholder')}" style="flex:1;min-width:0">
+                <button class="btn" type="submit">${t('ui.browse.searchButton')}</button>
+            </form>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+            <p id="result-line" class="muted" style="margin:0;flex:1"></p>
+            <button type="button" class="btn small" id="map-toggle"></button>
+        </div>
+        <div id="map" class="map" style="margin-bottom:12px" ${search.showMap ? '' : 'hidden'}></div>
         <div id="results" class="grid cards"></div>`);
 
     const map = makeMap($('#map'), search.lat ? search : HOME, search.lat ? 11 : 10);
     const markers = L.layerGroup().addTo(map);
-    let meMarker = null;
+    let circle = null;
+    let lastItems = [];
+
+    const renderWhere = () => mount($('#where'), search.lat != null
+        ? html`<span class="dist">📍 ${t('ui.browse.nearYou')}</span>`
+        : html`<button type="button" id="near-me" class="btn primary block">📍 ${t('ui.browse.useLocation')}</button>`);
+    const renderToggle = () => { $('#map-toggle').textContent = search.showMap ? `📋 ${t('ui.browse.showList')}` : `🗺️ ${t('ui.browse.showMap')}`; };
+
+    function drawMap(items) {
+        markers.clearLayers();
+        items.forEach((e) => {
+            L.marker([e.latitude, e.longitude]).addTo(markers)
+                .bindPopup(`<b>${escapeText(e.name)}</b><br>${escapeText(t('ui.equipment.perDay', { price: money(e.pricePerDay) }))}<br><a href="#/equipment/${e.id}">${escapeText(t('ui.browse.view'))}</a>`);
+        });
+        if (circle) circle.remove();
+        if (search.lat != null) {
+            circle = L.circle([search.lat, search.lng], { radius: search.radiusKm * 1000, color: '#2f6b3a', weight: 2, fillOpacity: 0.05 }).addTo(map);
+            map.fitBounds(circle.getBounds());
+        } else if (items.length) {
+            map.fitBounds(L.latLngBounds(items.map((e) => [e.latitude, e.longitude])).pad(0.2), { maxZoom: 12 });
+        }
+    }
 
     async function load() {
         const params = new URLSearchParams();
@@ -164,53 +257,71 @@ export async function browse(main) {
 
         const items = await attempt(() => get('/api/equipment?' + params));
         if (!items) return;
+        lastItems = items;
 
-        $('#result-line').textContent = search.lat != null
+        const summary = search.lat != null
             ? t('ui.browse.results', { n: items.length, km: search.radiusKm })
             : t('ui.browse.newest');
+        $('#result-line').textContent = summary;
+        mount($('#browse-speak'), speakButton(items.length
+            ? `${summary}. ${items.slice(0, 5).map((e) => `${e.name}, ${t('ui.equipment.perDay', { price: money(e.pricePerDay) })}${e.distanceKm != null ? ', ' + t('ui.equipment.distance', { km: e.distanceKm }) : ''}`).join('. ')}`
+            : t('ui.browse.empty')));
         mount($('#results'), items.length
             ? items.map(equipmentCard)
-            : html`<div class="empty card">${t('ui.browse.empty')}</div>`);
-
-        markers.clearLayers();
-        items.forEach((e) => {
-            L.marker([e.latitude, e.longitude]).addTo(markers)
-                .bindPopup(`<b>${escapeText(e.name)}</b><br>₹${escapeText(money(e.pricePerDay))}<br><a href="#/equipment/${e.id}">${escapeText(t('ui.browse.view'))}</a>`);
-        });
-        if (search.lat != null) {
-            if (meMarker) meMarker.remove();
-            meMarker = L.circle([search.lat, search.lng], { radius: search.radiusKm * 1000, color: '#2f6b3a', weight: 2, fillOpacity: 0.05 }).addTo(map);
-            map.fitBounds(meMarker.getBounds());
-        } else if (items.length) {
-            map.fitBounds(L.latLngBounds(items.map((e) => [e.latitude, e.longitude])).pad(0.2), { maxZoom: 12 });
-        }
+            : html`<div class="empty card"><div style="font-size:3rem">🔍</div>${t('ui.browse.empty')}</div>`);
+        if (search.showMap) drawMap(items);
     }
 
-    $('#near-me').addEventListener('click', async () => {
+    async function useLocation(silent) {
+        $('#result-line').textContent = t('ui.browse.finding');
         try {
             Object.assign(search, await locate());
-            load();
         } catch {
-            toast(t('ui.browse.locationDenied'), true);
+            if (!silent) toast(t('ui.browse.locationDenied'), true);
         }
-    });
-    $('#filters').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const f = formData(e.target);
-        search.radiusKm = Number(f.radiusKm);
-        search.category = f.category || '';
-        search.q = f.q || '';
+        renderWhere();
+        load();
+    }
+
+    $('#cats').addEventListener('click', (e) => {
+        const tile = e.target.closest('.cat-tile');
+        if (!tile) return;
+        search.category = tile.dataset.cat;
+        $$('.cat-tile').forEach((x) => x.classList.toggle('active', x === tile));
         load();
     });
-    $('#radius').addEventListener('change', () => $('#filters').requestSubmit());
-    $('#category').addEventListener('change', () => $('#filters').requestSubmit());
-    load();
-}
+    $('#radius').addEventListener('click', (e) => {
+        const chip = e.target.closest('.chip');
+        if (!chip) return;
+        search.radiusKm = Number(chip.dataset.km);
+        $$('#radius .chip').forEach((x) => x.classList.toggle('active', x === chip));
+        if (search.lat == null) useLocation(false); else load();
+    });
+    $('#where').addEventListener('click', (e) => { if (e.target.closest('#near-me')) useLocation(false); });
+    $('#search-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        search.q = formData(e.target).q || '';
+        load();
+    });
+    $('#map-toggle').addEventListener('click', () => {
+        search.showMap = !search.showMap;
+        $('#map').hidden = !search.showMap;
+        renderToggle();
+        if (search.showMap) {
+            map.invalidateSize();
+            drawMap(lastItems);
+        }
+    });
 
-function escapeText(s) {
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
+    renderWhere();
+    renderToggle();
+    // First visit: ask for location straight away so the nearest machines come first.
+    if (search.lat == null && !sessionStorage.getItem('agrishare.asked-location')) {
+        sessionStorage.setItem('agrishare.asked-location', '1');
+        useLocation(true);
+    } else {
+        load();
+    }
 }
 
 function equipmentCard(e) {
@@ -219,14 +330,14 @@ function equipmentCard(e) {
             ${thumb(e.imageUrl, e.category)}
             <div class="body">
                 <h3>${e.name}</h3>
-                <div class="muted small">${t('ui.category.' + e.category)}${e.address ? html` · ${e.address}` : ''}</div>
+                <div class="muted small">${ICONS[e.category]} ${t('ui.category.' + e.category)}${e.address ? html` · ${e.address}` : ''}</div>
                 <div class="row" style="margin-top:6px">
                     <span class="price">${t('ui.equipment.perDay', { price: money(e.pricePerDay) })}</span>
                     <span class="spacer"></span>
                     <span class="small">${stars(e.averageRating, e.reviewCount)}</span>
                 </div>
-                <div class="row small" style="margin-top:4px">
-                    ${e.distanceKm != null ? html`<span>📍 ${t('ui.equipment.distance', { km: e.distanceKm })}</span>` : ''}
+                <div class="row" style="margin-top:4px">
+                    ${e.distanceKm != null ? html`<span class="dist">📍 ${t('ui.equipment.distance', { km: e.distanceKm })}</span>` : ''}
                     ${!e.available ? html`<span class="pill red">${t('ui.equipment.unavailable')}</span>` : ''}
                 </div>
             </div>
@@ -242,28 +353,30 @@ export async function equipmentDetail(main, id) {
         get(`/api/equipment/${id}/booked-dates`),
     ]);
     const mine = session.user && session.user.id === e.owner.id;
+    const say = [e.name, t('ui.category.' + e.category), t('ui.equipment.perDay', { price: money(e.pricePerDay) }),
+        `${t('ui.equipment.owner')}: ${e.owner.name}`, e.address || '', e.description || ''].filter(Boolean).join('. ');
 
     mount(main, html`
-        <p><a href="#/browse">← ${t('ui.common.back')}</a></p>
+        <p><a href="#/browse" class="btn small">← ${t('ui.common.back')}</a></p>
         <div class="grid two">
             <div class="stack">
                 ${thumb(e.imageUrl, e.category, 'detail-photo card')}
                 <div class="card">
-                    <h1>${e.name}</h1>
+                    <div class="title-row"><h1>${e.name}</h1>${speakButton(say)}</div>
                     <div class="row">
-                        <span class="pill">${t('ui.category.' + e.category)}</span>
+                        <span class="pill">${ICONS[e.category]} ${t('ui.category.' + e.category)}</span>
                         <span>${stars(e.averageRating, e.reviewCount)}</span>
                     </div>
-                    <p class="price" style="margin-top:10px">${t('ui.equipment.perDay', { price: money(e.pricePerDay) })}</p>
+                    <p class="price" style="margin-top:10px;font-size:1.6rem">${t('ui.equipment.perDay', { price: money(e.pricePerDay) })}</p>
+                    <p>👨‍🌾 <b>${e.owner.name}</b>${e.address ? html`<br>📍 ${e.address}` : ''}</p>
                     ${e.description ? html`<p style="white-space:pre-line">${e.description}</p>` : ''}
-                    <p class="muted">👤 ${t('ui.equipment.owner')}: ${e.owner.name}${e.address ? html`<br>📍 ${e.address}` : ''}</p>
-                    <div id="detail-map" class="map"></div>
                 </div>
+                <div class="card" id="book-card"></div>
             </div>
             <div class="stack">
-                <div class="card" id="book-card"></div>
+                <div class="card"><div id="detail-map" class="map"></div></div>
                 <div class="card">
-                    <h2>${t('ui.reviews.title')}</h2>
+                    <h2>⭐ ${t('ui.reviews.title')}</h2>
                     ${reviews.reviews.length ? reviews.reviews.map((r) => html`
                         <div style="border-top:1px solid var(--line);padding:10px 0">
                             <div class="row"><b>${r.reviewer.name}</b><span class="spacer"></span><span class="stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span></div>
@@ -279,7 +392,7 @@ export async function equipmentDetail(main, id) {
 
     const card = $('#book-card');
     const takenList = booked.length ? html`
-        <p class="small muted" style="margin:10px 0 0">${t('ui.book.taken')}</p>
+        <p class="small muted" style="margin:10px 0 4px">📅 ${t('ui.book.taken')}</p>
         <ul class="booked-list">${booked.map((b) => html`<li class="pill amber">${date(b.startDate)} – ${date(b.endDate)}</li>`)}</ul>` : '';
 
     if (mine) {
@@ -287,54 +400,101 @@ export async function equipmentDetail(main, id) {
         return;
     }
     if (!e.available) {
-        mount(card, html`<p class="pill red">${t('ui.equipment.unavailable')}</p>`);
+        mount(card, html`<div class="status-banner red"><span class="emoji">🚫</span><b>${t('ui.equipment.unavailable')}</b></div>`);
         return;
     }
     if (!session.loggedIn) {
         sessionStorage.setItem('agrishare.after-login', location.hash);
-        mount(card, html`<h2>${t('ui.book.title')}</h2>${takenList}<a class="btn primary block" href="#/login">${t('ui.book.loginFirst')}</a>`);
+        mount(card, html`<h2>📅 ${t('ui.book.title')}</h2>${takenList}<a class="btn primary block" href="#/login">👤 ${t('ui.book.loginFirst')}</a>`);
         return;
     }
+    bookingForm(card, e, booked, takenList);
+}
+
+function bookingForm(card, e, booked, takenList) {
+    const state = { start: today(), days: 1, pay: 'CASH' };
 
     mount(card, html`
-        <h2>${t('ui.book.title')}</h2>
+        <h2>📅 ${t('ui.book.title')}</h2>
         <form id="book-form" novalidate>
-            <div class="grid two">
-                <div class="field"><label for="startDate">${t('ui.book.start')}</label>
-                    <input id="startDate" name="startDate" type="date" min="${today()}" value="${today()}" required></div>
-                <div class="field"><label for="endDate">${t('ui.book.end')}</label>
-                    <input id="endDate" name="endDate" type="date" min="${today()}" value="${today()}" required></div>
+            <label>${t('ui.book.when')}</label>
+            <div class="chips" id="when">
+                <button type="button" class="chip active" data-when="0">${t('ui.book.today')}</button>
+                <button type="button" class="chip" data-when="1">${t('ui.book.tomorrow')}</button>
+                <button type="button" class="chip" data-when="other">📅 ${t('ui.book.otherDay')}</button>
             </div>
+            <input type="date" id="other-date" min="${today()}" max="${addDays(today(), 180)}" hidden style="margin-top:8px">
             ${takenList}
-            <div class="field" style="margin-top:10px">
-                <label>${t('ui.book.payment')}</label>
-                <label class="choice"><input type="radio" name="paymentMethod" value="CASH" checked> 💵 ${t('ui.book.cash')}</label>
-                <label class="choice"><input type="radio" name="paymentMethod" value="ONLINE"> 📱 ${t('ui.book.online')}</label>
+
+            <label style="margin-top:16px">${t('ui.book.howLong')}</label>
+            <div class="stepper">
+                <button type="button" id="minus" aria-label="-">−</button>
+                <output id="days"></output>
+                <button type="button" id="plus" aria-label="+">+</button>
             </div>
-            <div class="field"><label for="note">${t('ui.book.note')}</label>
-                <textarea id="note" name="note" maxlength="500"></textarea></div>
-            <p id="total" class="price"></p>
-            <button class="btn primary block" type="submit">${t('ui.book.submit')}</button>
+            <p class="muted" id="until" style="margin:6px 0 0"></p>
+            <div id="clash" class="warn" hidden>⚠️ ${t('ui.book.clash')}</div>
+
+            <label style="margin-top:16px">${t('ui.book.payment')}</label>
+            <div class="pay-cards">
+                <label class="pay-card"><input type="radio" name="pay" value="CASH" checked>
+                    <span class="emoji">💵</span><b>${t('ui.book.cash')}</b><small>${t('ui.book.cashSub')}</small></label>
+                <label class="pay-card"><input type="radio" name="pay" value="ONLINE">
+                    <span class="emoji">📱</span><b>${t('ui.book.online')}</b><small>${t('ui.book.onlineSub')}</small></label>
+            </div>
+
+            <div class="total-box"><span>${t('ui.book.totalLabel')}</span><b id="total"></b></div>
+
+            <details style="margin-bottom:12px"><summary class="muted">💬 ${t('ui.book.note')}</summary>
+                <textarea id="note" maxlength="500" style="margin-top:8px"></textarea></details>
+            <button class="btn primary block" type="submit" id="book-submit" style="min-height:60px;font-size:1.2rem">✅ ${t('ui.book.submit')}</button>
         </form>`);
 
-    const form = $('#book-form');
-    const updateTotal = () => {
-        const { startDate, endDate } = formData(form);
-        const days = startDate && endDate ? daysBetween(startDate, endDate) : 0;
-        $('#total').textContent = days > 0 ? t('ui.book.total', { days, total: money(days * Number(e.pricePerDay)) }) : '';
-    };
-    form.startDate.addEventListener('change', () => {
-        if (form.endDate.value < form.startDate.value) form.endDate.value = form.startDate.value;
-        form.endDate.min = form.startDate.value;
-        updateTotal();
-    });
-    form.endDate.addEventListener('change', updateTotal);
-    updateTotal();
+    const end = () => addDays(state.start, state.days - 1);
+    const clashes = () => booked.some((b) => b.startDate <= end() && b.endDate >= state.start);
 
-    form.addEventListener('submit', async (ev) => {
+    function update() {
+        $('#days').textContent = daysText(state.days);
+        $('#until').textContent = t('ui.book.until', { date: date(end()) });
+        $('#total').textContent = `₹${money(state.days * Number(e.pricePerDay))}`;
+        const clash = clashes();
+        $('#clash').hidden = !clash;
+        $('#book-submit').disabled = clash;
+    }
+
+    $('#when').addEventListener('click', (ev) => {
+        const chip = ev.target.closest('.chip');
+        if (!chip) return;
+        $$('#when .chip').forEach((c) => c.classList.toggle('active', c === chip));
+        const other = chip.dataset.when === 'other';
+        $('#other-date').hidden = !other;
+        if (other) {
+            $('#other-date').value = state.start;
+            $('#other-date').showPicker?.();
+        } else {
+            state.start = addDays(today(), Number(chip.dataset.when));
+        }
+        update();
+    });
+    $('#other-date').addEventListener('change', (ev) => {
+        if (ev.target.value) state.start = ev.target.value;
+        update();
+    });
+    $('#minus').addEventListener('click', () => { state.days = Math.max(1, state.days - 1); update(); });
+    $('#plus').addEventListener('click', () => { state.days = Math.min(MAX_DAYS, state.days + 1); update(); });
+    update();
+
+    $('#book-form').addEventListener('submit', async (ev) => {
         ev.preventDefault();
-        const data = { ...formData(form), equipmentId: Number(id) };
-        const booking = await attempt(() => post('/api/bookings', data), form);
+        const form = ev.target;
+        const body = {
+            equipmentId: e.id,
+            startDate: state.start,
+            endDate: end(),
+            paymentMethod: form.pay.value,
+            note: $('#note').value.trim() || null,
+        };
+        const booking = await attempt(() => post('/api/bookings', body), form);
         if (!booking) return;
         if (booking.checkout) {
             await checkout(booking);
@@ -354,12 +514,12 @@ async function checkout(booking) {
     // Mock mode: a stand-in dialog so the whole flow can be demoed without real money.
     return new Promise((resolve) => {
         const dialog = openModal(html`
-            <h2>${t('ui.pay.title', { amount: money(c.amountPaise / 100) })}</h2>
+            <h2>📱 ${t('ui.pay.title', { amount: money(c.amountPaise / 100) })}</h2>
             <p>${booking.equipment.name} · ${date(booking.startDate)} – ${date(booking.endDate)}</p>
-            <p class="muted small">${t('ui.pay.held')}</p>
+            <p class="muted small">🔒 ${t('ui.pay.held')}</p>
             <p class="pill amber">${t('ui.pay.mockNote')}</p>
             <div class="row" style="margin-top:14px">
-                <button class="btn primary" id="pay-now">${t('ui.pay.payNow')}</button>
+                <button class="btn primary" id="pay-now">✅ ${t('ui.pay.payNow')}</button>
                 <button class="btn" id="pay-later">${t('ui.common.close')}</button>
             </div>`);
         $('#pay-later', dialog).onclick = () => { closeModal(); resolve(); };
@@ -414,22 +574,20 @@ async function razorpayCheckout(booking) {
 
 export async function login(main) {
     mount(main, html`
-        <div class="card" style="max-width:440px;margin:0 auto">
-            <h1>${t('ui.auth.login')}</h1>
+        <div class="card" style="max-width:460px;margin:0 auto">
+            <h1>👤 ${t('ui.auth.login')}</h1>
             <form id="login-form" novalidate>
-                <div class="field"><label for="identifier">${t('ui.auth.identifier')}</label>
-                    <input id="identifier" name="identifier" inputmode="email" autocomplete="username" required></div>
-                <div class="field"><label for="password">${t('ui.auth.password')}</label>
-                    <input id="password" name="password" type="password" autocomplete="current-password" required></div>
-                <button class="btn primary block" type="submit">${t('ui.auth.login')}</button>
+                <div class="field"><label for="identifier">📱 ${t('ui.auth.identifier')}</label>
+                    <input id="identifier" name="identifier" inputmode="tel" autocomplete="username" required></div>
+                ${passwordField('password', 'password', 'current-password', html`🔒 ${t('ui.auth.password')}`)}
+                <button class="btn primary block" type="submit" style="min-height:56px">${t('ui.auth.login')}</button>
             </form>
-            <p class="center" style="margin-top:14px"><a href="#/register">${t('ui.auth.noAccount')}</a></p>
+            <a class="btn block" href="#/register" style="margin-top:14px">✨ ${t('ui.auth.noAccount')}</a>
         </div>`);
     $('#login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const auth = await attempt(() => post('/api/auth/login', formData(e.target)), e.target);
-        if (!auth) return;
-        await signedIn(auth);
+        if (auth) await signedIn(auth);
     });
 }
 
@@ -440,30 +598,39 @@ async function signedIn(auth) {
     goAfterLogin();
 }
 
+function roleChoices(selected) {
+    const roles = [['RENTER', '🚜'], ['OWNER', '💰'], ['BOTH', '🔁']];
+    return html`
+        <div class="field"><label>${t('ui.profile.role')}</label>
+            <div class="grid three">
+                ${roles.map(([role, emoji]) => html`
+                    <label class="pay-card"><input type="radio" name="role" value="${role}" ${role === selected ? 'checked' : ''}>
+                        <span class="emoji">${emoji}</span><b>${t('ui.role.' + role)}</b></label>`)}
+            </div>
+        </div>`;
+}
+
 export async function register(main) {
     mount(main, html`
-        <div class="card" style="max-width:480px;margin:0 auto">
-            <h1>${t('ui.auth.register')}</h1>
+        <div class="card" style="max-width:520px;margin:0 auto">
+            <h1>✨ ${t('ui.auth.register')}</h1>
             <form id="register-form" novalidate>
-                <div class="field"><label for="name">${t('ui.auth.name')}</label>
+                <div class="field"><label for="name">👤 ${t('ui.auth.name')}</label>
                     <input id="name" name="name" autocomplete="name" required></div>
-                <div class="field"><label for="phone">${t('ui.auth.phone')}</label>
-                    <input id="phone" name="phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" required></div>
-                <div class="field"><label for="email">${t('ui.auth.email')}</label>
-                    <input id="email" name="email" type="email" autocomplete="email"></div>
-                <div class="field"><label for="password">${t('ui.auth.password')} <span class="hint">${t('ui.auth.passwordHint')}</span></label>
-                    <input id="password" name="password" type="password" autocomplete="new-password" required></div>
-                <div class="field"><label for="role">${t('ui.profile.role')}</label>
-                    <select id="role" name="role">
-                        ${['BOTH', 'RENTER', 'OWNER'].map((r) => html`<option value="${r}">${t('ui.role.' + r)}</option>`)}
-                    </select></div>
+                <div class="field"><label for="phone">📱 ${t('ui.auth.phone')}</label>
+                    <input id="phone" name="phone" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" placeholder="98765 43210" required>
+                    <div class="hint">${t('ui.auth.whyPhone')}</div></div>
+                ${passwordField('password', 'password', 'new-password', html`🔒 ${t('ui.auth.password')} <span class="hint">${t('ui.auth.passwordHint')}</span>`)}
+                ${roleChoices('BOTH')}
                 <div class="field">
                     <button type="button" id="reg-locate" class="btn block">📍 ${t('ui.auth.shareLocation')}</button>
-                    <div id="reg-located" class="hint" hidden>✓ ${t('ui.auth.locationSet')}</div>
+                    <div id="reg-located" class="hint" hidden>✅ ${t('ui.auth.locationSet')}</div>
                 </div>
-                <button class="btn primary block" type="submit">${t('ui.auth.register')}</button>
+                <details class="field"><summary class="muted">✉️ ${t('ui.auth.email')}</summary>
+                    <input id="email" name="email" type="email" autocomplete="email" style="margin-top:8px"></details>
+                <button class="btn primary block" type="submit" style="min-height:56px">✅ ${t('ui.auth.register')}</button>
             </form>
-            <p class="center" style="margin-top:14px"><a href="#/login">${t('ui.auth.haveAccount')}</a></p>
+            <a class="btn block" href="#/login" style="margin-top:14px">${t('ui.auth.haveAccount')}</a>
         </div>`);
 
     let coords = null;
@@ -478,6 +645,7 @@ export async function register(main) {
     $('#register-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const data = { ...formData(e.target), preferredLanguage: currentLang() };
+        if (data.phone) data.phone = data.phone.replace(/\D/g, '');
         if (coords) Object.assign(data, { latitude: coords.lat, longitude: coords.lng });
         const auth = await attempt(() => post('/api/auth/register', data), e.target);
         if (auth) await signedIn(auth);
@@ -487,11 +655,10 @@ export async function register(main) {
 /* ---------------------------------------------------------------- dashboard */
 
 export async function dashboard(main, tab = 'bookings') {
-    const tabs = ['bookings', 'requests', 'equipment', 'notifications'];
+    const tabs = [['bookings', '📋'], ['requests', '📥'], ['equipment', '🚜'], ['notifications', '🔔']];
     mount(main, html`
-        <h1>${t('ui.dash.title')}</h1>
         <nav class="tabs">
-            ${tabs.map((name) => html`<a href="#/dashboard/${name}" class="${name === tab ? 'active' : ''}">${t('ui.dash.' + name)}</a>`)}
+            ${tabs.map(([name, emoji]) => html`<a href="#/dashboard/${name}" class="${name === tab ? 'active' : ''}">${emoji} ${t('ui.dash.' + name)}</a>`)}
         </nav>
         <div id="tab" class="stack"><div class="loading">${t('ui.common.loading')}</div></div>`);
     const el = $('#tab');
@@ -501,8 +668,9 @@ export async function dashboard(main, tab = 'bookings') {
         const list = await get(asOwner ? '/api/bookings/incoming' : '/api/bookings/mine');
         mount(el, list.length
             ? list.map((b) => bookingCard(b, asOwner))
-            : html`<div class="card empty">${t(asOwner ? 'ui.dash.noRequests' : 'ui.dash.noBookings')}
-                ${asOwner ? '' : html`<p style="margin-top:12px"><a class="btn primary" href="#/browse">${t('ui.home.find')}</a></p>`}</div>`);
+            : html`<div class="card empty"><div style="font-size:3rem">${asOwner ? '📥' : '📋'}</div>
+                ${t(asOwner ? 'ui.dash.noRequests' : 'ui.dash.noBookings')}
+                ${asOwner ? '' : html`<p style="margin-top:12px"><a class="btn primary" href="#/browse">🔍 ${t('ui.home.find')}</a></p>`}</div>`);
         el.onclick = (ev) => {
             const button = ev.target.closest('button[data-action]');
             if (button) bookingAction(button.dataset.action, list.find((b) => b.id === Number(button.dataset.id)), asOwner);
@@ -510,27 +678,33 @@ export async function dashboard(main, tab = 'bookings') {
     } else if (tab === 'equipment') {
         const list = await get('/api/equipment/mine');
         mount(el, html`
-            <p><a class="btn primary" href="#/equipment/new">${t('ui.dash.addEquipment')}</a></p>
-            ${list.length ? html`<div class="grid cards">${list.map(equipmentCard)}</div>` : html`<div class="card empty">${t('ui.dash.noEquipment')}</div>`}`);
+            <a class="btn primary block" href="#/equipment/new" style="min-height:56px">➕ ${t('ui.dash.addEquipment')}</a>
+            ${list.length ? html`<div class="grid cards">${list.map(equipmentCard)}</div>`
+                : html`<div class="card empty"><div style="font-size:3rem">🚜</div>${t('ui.dash.noEquipment')}</div>`}`);
     } else {
         const list = await get('/api/notifications');
         mount(el, html`
-            ${list.some((n) => !n.read) ? html`<p><button class="btn small" id="read-all">${t('ui.dash.markAllRead')}</button></p>` : ''}
-            ${list.length ? list.map((n) => html`
-                <a class="card notif ${n.read ? '' : 'unread'}" href="#" data-id="${n.id}" data-type="${n.type}" data-owner="${n.params.owner || ''}" style="text-decoration:none;color:inherit">
-                    <div style="flex:1">
+            ${list.some((n) => !n.read) ? html`<p><button class="btn small" id="read-all">✔️ ${t('ui.dash.markAllRead')}</button></p>` : ''}
+            ${list.length ? list.map((n) => {
+                const body = notificationBody(n);
+                return html`
+                <div class="card notif ${n.read ? '' : 'unread'}">
+                    <span style="font-size:2rem">${NOTIFICATION_ICONS[n.type] || '🔔'}</span>
+                    <a href="#" data-id="${n.id}" data-type="${n.type}" data-owner="${n.params.owner || ''}" class="notif-link" style="flex:1;text-decoration:none;color:inherit">
                         <b>${t(`notification.${n.type}.title`)}</b>
-                        <div>${notificationBody(n)}</div>
-                    </div>
-                    <span class="muted small when">${dateTime(n.createdAt)}</span>
-                </a>`) : html`<div class="card empty">${t('ui.dash.noNotifications')}</div>`}`);
+                        <div>${body}</div>
+                        <div class="muted small">${dateTime(n.createdAt)}</div>
+                    </a>
+                    ${speakButton(`${t(`notification.${n.type}.title`)}. ${body}`)}
+                </div>`;
+            }) : html`<div class="card empty"><div style="font-size:3rem">🔔</div>${t('ui.dash.noNotifications')}</div>`}`);
         $('#read-all')?.addEventListener('click', async () => {
             await attempt(() => post('/api/notifications/read-all'));
             refreshUnread();
             dashboard(main, 'notifications');
         });
-        el.addEventListener('click', async (ev) => {
-            const item = ev.target.closest('a.notif');
+        el.addEventListener('click', (ev) => {
+            const item = ev.target.closest('a.notif-link');
             if (!item) return;
             ev.preventDefault();
             post(`/api/notifications/${item.dataset.id}/read`).catch(() => {});
@@ -548,51 +722,62 @@ function notificationBody(n) {
     return t(`notification.${n.type}.body`, p);
 }
 
+function statusHelp(status, asOwner) {
+    if (asOwner && (status === 'REQUESTED' || status === 'CONFIRMED')) return t(`ui.statusHelp.owner.${status}`);
+    return t(`ui.statusHelp.${status}`);
+}
+
 function bookingCard(b, asOwner) {
     const other = asOwner ? b.renter : b.owner;
     const otherPhone = asOwner ? b.renterPhone : b.ownerPhone;
     const started = today() >= b.startDate;
+    const [emoji, colour] = STATUS[b.status];
+    const help = statusHelp(b.status, asOwner);
+    const range = t('ui.booking.range', { start: date(b.startDate), end: date(b.endDate) });
     const actions = [];
 
     if (!asOwner) {
-        if (b.status === 'AWAITING_PAYMENT') actions.push(['pay', 'primary', 'ui.booking.pay']);
+        if (b.status === 'AWAITING_PAYMENT') actions.push(['pay', 'primary', '📱', 'ui.booking.pay']);
         if (['AWAITING_PAYMENT', 'REQUESTED'].includes(b.status) || (b.status === 'CONFIRMED' && !started)) {
-            actions.push(['cancel', 'danger', 'ui.booking.cancel']);
+            actions.push(['cancel', 'danger', '🚫', 'ui.booking.cancel']);
         }
     } else {
-        if (b.status === 'REQUESTED') actions.push(['approve', 'primary', 'ui.booking.approve'], ['reject', 'danger', 'ui.booking.reject']);
-        if (b.status === 'CONFIRMED' && started) actions.push(['complete', 'primary', 'ui.booking.complete']);
-        if (b.status === 'CONFIRMED' && !started) actions.push(['cancel', 'danger', 'ui.booking.cancel']);
+        if (b.status === 'REQUESTED') actions.push(['approve', 'primary', '✅', 'ui.booking.approve'], ['reject', 'danger', '❌', 'ui.booking.reject']);
+        if (b.status === 'CONFIRMED' && started) actions.push(['complete', 'primary', '🏁', 'ui.booking.complete']);
+        if (b.status === 'CONFIRMED' && !started) actions.push(['cancel', 'danger', '🚫', 'ui.booking.cancel']);
     }
-    if (b.status === 'COMPLETED' && !b.reviewedByMe) actions.push(['review', 'amber', 'ui.booking.rate']);
+    if (b.status === 'COMPLETED' && !b.reviewedByMe) actions.push(['review', 'amber', '⭐', 'ui.booking.rate']);
+
+    const say = [t('ui.status.' + b.status), help, b.equipment.name, range, daysText(b.days),
+        t('ui.booking.total', { total: money(b.totalAmount) }), `${t(asOwner ? 'ui.booking.renter' : 'ui.booking.owner')}: ${other.name}`].join('. ');
 
     return html`
         <div class="card booking-card">
+            <div class="status-banner ${colour}">
+                <span class="emoji">${emoji}</span>
+                <div style="flex:1"><b>${t('ui.status.' + b.status)}</b><span>${help}</span></div>
+                ${speakButton(say)}
+            </div>
             <div class="top">
                 ${thumb(b.equipment.imageUrl, b.equipment.category, 'mini')}
                 <div style="flex:1;min-width:0">
-                    <div class="row"><b><a href="#/equipment/${b.equipment.id}">${b.equipment.name}</a></b>
-                        <span class="spacer"></span><span class="pill ${STATUS_PILL[b.status]}">${t('ui.status.' + b.status)}</span></div>
-                    <div>${t('ui.booking.dates', { start: date(b.startDate), end: date(b.endDate), days: b.days })}</div>
-                    <div class="row small">
-                        <span>${t('ui.booking.total', { total: money(b.totalAmount) })}</span>
-                        <span class="pill grey">${t('ui.payment.' + b.paymentStatus)}</span>
+                    <b><a href="#/equipment/${b.equipment.id}">${b.equipment.name}</a></b>
+                    <div>📅 ${range} · ${daysText(b.days)}</div>
+                    <div class="row">
+                        <span class="price">₹${money(b.totalAmount)}</span>
+                        <span class="pill grey">${b.paymentMethod === 'CASH' ? '💵' : '📱'} ${t('ui.payment.' + b.paymentStatus)}</span>
                     </div>
-                    <div class="muted small">${t(asOwner ? 'ui.booking.renter' : 'ui.booking.owner')}: ${other.name}</div>
+                    <div class="muted small">${asOwner ? '👨‍🌾' : '🚜'} ${t(asOwner ? 'ui.booking.renter' : 'ui.booking.owner')}: ${other.name}</div>
                 </div>
             </div>
             ${b.note ? html`<p class="small" style="margin:8px 0 0">💬 ${b.note}</p>` : ''}
             ${b.rejectReason ? html`<p class="small" style="margin:8px 0 0">${t('ui.booking.reason', { reason: b.rejectReason })}</p>` : ''}
             ${otherPhone ? html`
-                <div class="phone-box row">
-                    <span>📞 ${other.name}: <b>${otherPhone}</b></span>
-                    <span class="spacer"></span>
-                    <a class="btn small primary" href="tel:+91${otherPhone}">${t('ui.booking.call')}</a>
-                </div>
-                ${b.paymentMethod === 'CASH' && !asOwner && b.status === 'CONFIRMED' ? html`<p class="small muted" style="margin:6px 0 0">${t('ui.booking.cashNote')}</p>` : ''}` : ''}
+                <a class="btn block call-btn" href="tel:+91${otherPhone}" style="margin-top:12px">📞 ${t('ui.booking.call')} ${other.name} · ${otherPhone}</a>
+                ${b.paymentMethod === 'CASH' && !asOwner && b.status === 'CONFIRMED' ? html`<p class="small muted" style="margin:6px 0 0">💵 ${t('ui.booking.cashNote')}</p>` : ''}` : ''}
             ${b.status === 'COMPLETED' && b.reviewedByMe ? html`<p class="small muted" style="margin:8px 0 0">${t('ui.booking.reviewed')}</p>` : ''}
             ${actions.length ? html`<div class="actions">
-                ${actions.map(([action, style, key]) => html`<button class="btn small ${style}" data-action="${action}" data-id="${b.id}">${t(key)}</button>`)}
+                ${actions.map(([action, style, icon, key]) => html`<button class="btn ${style}" data-action="${action}" data-id="${b.id}">${icon} ${t(key)}</button>`)}
             </div>` : ''}
         </div>`;
 }
@@ -609,7 +794,7 @@ async function bookingAction(action, b, asOwner) {
     if (action === 'review') return reviewDialog(b, asOwner, reload);
     if (action === 'reject') {
         const dialog = openModal(html`
-            <h2>${t('ui.booking.reject')}</h2>
+            <h2>❌ ${t('ui.booking.reject')}</h2>
             <div class="field"><label for="reason">${t('ui.booking.rejectReason')}</label><textarea id="reason" maxlength="500"></textarea></div>
             <div class="row"><button class="btn danger solid" id="ok">${t('ui.booking.reject')}</button><button class="btn" id="no">${t('ui.common.cancel')}</button></div>`);
         $('#no', dialog).onclick = closeModal;
@@ -620,11 +805,11 @@ async function bookingAction(action, b, asOwner) {
         };
         return;
     }
-    if (action === 'cancel' && !confirm(t('ui.booking.confirmCancel'))) return;
+    if (action === 'cancel' && !(await confirmDialog(t('ui.booking.confirmCancel'), 'ui.booking.cancel', true))) return;
 
     const done = await attempt(() => post(`${base}/${action}`));
     if (done) {
-        toast(t('ui.status.' + done.status));
+        toast(`${STATUS[done.status][0]} ${t('ui.status.' + done.status)}`);
         reload();
     }
 }
@@ -633,7 +818,7 @@ function reviewDialog(b, asOwner, done) {
     const who = asOwner ? b.renter.name : b.owner.name;
     let rating = 0;
     const dialog = openModal(html`
-        <h2>${t('ui.review.title', { name: who })}</h2>
+        <h2>⭐ ${t('ui.review.title', { name: who })}</h2>
         <div class="star-input" id="stars">${[1, 2, 3, 4, 5].map((n) => html`<button type="button" data-n="${n}" aria-label="${n}">★</button>`)}</div>
         <div class="field"><label for="comment">${t('ui.review.comment')}</label><textarea id="comment" maxlength="1000"></textarea></div>
         <div class="row"><button class="btn primary" id="send" disabled>${t('ui.review.submit')}</button><button class="btn" id="no">${t('ui.common.cancel')}</button></div>`);
@@ -667,35 +852,44 @@ export async function equipmentForm(main, id) {
 
     mount(main, html`
         <div class="card" style="max-width:720px;margin:0 auto">
-            <h1>${t(e ? 'ui.form.editTitle' : 'ui.form.newTitle')}</h1>
+            <h1>${e ? '✏️' : '➕'} ${t(e ? 'ui.form.editTitle' : 'ui.form.newTitle')}</h1>
             <form id="eq-form" novalidate>
-                <div class="field"><label for="name">${t('ui.form.name')}</label>
+                <div class="field"><label>1. ${t('ui.form.category')}</label>
+                    <div class="cat-strip" style="flex-wrap:wrap">
+                        ${categories.map((c) => html`
+                            <label class="cat-tile ${c === e?.category ? 'active' : ''}">
+                                <input type="radio" name="category" value="${c}" ${c === e?.category ? 'checked' : ''} hidden>
+                                <span class="emoji">${ICONS[c]}</span>${t('ui.category.' + c)}</label>`)}
+                    </div>
+                </div>
+                <div class="field"><label for="name">2. ${t('ui.form.name')}</label>
                     <input id="name" name="name" maxlength="120" value="${e?.name ?? ''}" placeholder="${t('ui.form.namePlaceholder')}" required></div>
-                <div class="grid two">
-                    <div class="field"><label for="category">${t('ui.form.category')}</label>
-                        <select id="category" name="category" required>${categoryOptions(e?.category, e ? null : 'ui.form.choose')}</select></div>
-                    <div class="field"><label for="pricePerDay">${t('ui.form.price')}</label>
-                        <input id="pricePerDay" name="pricePerDay" type="number" inputmode="decimal" min="1" step="1" value="${e?.pricePerDay ?? ''}" required></div>
-                </div>
-                <div class="field"><label for="description">${t('ui.form.description')}</label>
-                    <textarea id="description" name="description" maxlength="2000">${e?.description ?? ''}</textarea></div>
-                <div class="field"><label for="address">${t('ui.form.address')}</label>
-                    <input id="address" name="address" maxlength="255" value="${e?.address ?? ''}"></div>
+                <div class="field"><label for="pricePerDay">3. ${t('ui.form.price')}</label>
+                    <input id="pricePerDay" name="pricePerDay" type="number" inputmode="numeric" min="1" step="1" value="${e?.pricePerDay ?? ''}" placeholder="₹ 1500" style="font-size:1.4rem;font-weight:700" required></div>
                 <div class="field">
-                    <label>${t('ui.form.location')} <span class="hint">${t('ui.form.locationHelp')}</span></label>
+                    <label>4. 📍 ${t('ui.form.location')} <span class="hint">${t('ui.form.locationHelp')}</span></label>
+                    <button type="button" id="pick-me" class="btn primary block" style="margin-bottom:8px">📍 ${t('ui.form.useMyLocation')}</button>
                     <div id="pick-map" class="map tall"></div>
-                    <button type="button" id="pick-me" class="btn block" style="margin-top:8px">📍 ${t('ui.form.useMyLocation')}</button>
-                    <input type="hidden" name="latitude"><input type="hidden" name="longitude">
                 </div>
-                <div class="field"><label for="photo">${t('ui.form.photo')}</label>
-                    <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp"></div>
-                <label class="check"><input type="checkbox" name="available" ${!e || e.available ? 'checked' : ''}> ${t('ui.form.available')}</label>
-                <div class="row" style="margin-top:14px">
-                    <button class="btn primary" type="submit">${t('ui.form.save')}</button>
-                    ${e ? html`<span class="spacer"></span><button class="btn danger" type="button" id="remove">${t('ui.form.delete')}</button>` : ''}
-                </div>
+                <div class="field"><label for="photo">5. 📷 ${t('ui.form.photo')}</label>
+                    <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></div>
+                <details class="field" ${e?.description || e?.address ? 'open' : ''}><summary class="muted">📝 ${t('ui.form.description')}</summary>
+                    <div class="field" style="margin-top:8px"><label for="address">${t('ui.form.address')}</label>
+                        <input id="address" name="address" maxlength="255" value="${e?.address ?? ''}"></div>
+                    <textarea id="description" name="description" maxlength="2000">${e?.description ?? ''}</textarea>
+                </details>
+                <label class="check"><input type="checkbox" name="available" ${!e || e.available ? 'checked' : ''}> ✅ ${t('ui.form.available')}</label>
+                <button class="btn primary block" type="submit" style="margin-top:14px;min-height:60px;font-size:1.2rem">💾 ${t('ui.form.save')}</button>
+                ${e ? html`<button class="btn danger block" type="button" id="remove" style="margin-top:10px">🗑️ ${t('ui.form.delete')}</button>` : ''}
             </form>
         </div>`);
+
+    const form = $('#eq-form');
+    form.addEventListener('change', (ev) => {
+        if (ev.target.name === 'category') {
+            $$('.cat-tile', form).forEach((tile) => tile.classList.toggle('active', tile.contains(ev.target)));
+        }
+    });
 
     const map = makeMap($('#pick-map'), point || HOME, point ? 14 : 10);
     let marker = point ? L.marker([point.lat, point.lng]).addTo(map) : null;
@@ -709,11 +903,11 @@ export async function equipmentForm(main, id) {
         try { setPoint(await locate(), 15); } catch { toast(t('ui.browse.locationDenied'), true); }
     });
 
-    const form = $('#eq-form');
     form.addEventListener('submit', async (ev) => {
         ev.preventDefault();
-        if (!point) { toast(t('ui.form.locationRequired'), true); return; }
         const data = formData(form);
+        if (!data.category) { toast(t('validation.equipment.category.required'), true); return; }
+        if (!point) { toast(t('ui.form.locationRequired'), true); return; }
         delete data.photo;
         Object.assign(data, { latitude: point.lat, longitude: point.lng, available: form.available.checked });
 
@@ -725,11 +919,11 @@ export async function equipmentForm(main, id) {
             body.append('file', file);
             await attempt(() => post(`/api/equipment/${saved.id}/image`, body));
         }
-        toast(t('ui.form.saved'));
+        toast(`✅ ${t('ui.form.saved')}`);
         location.hash = `#/equipment/${saved.id}`;
     });
     $('#remove')?.addEventListener('click', async () => {
-        if (!confirm(t('ui.form.confirmDelete'))) return;
+        if (!(await confirmDialog(t('ui.form.confirmDelete'), 'ui.form.delete', true))) return;
         const ok = await attempt(() => del(`/api/equipment/${e.id}`).then(() => true));
         if (ok) location.hash = '#/dashboard/equipment';
     });
@@ -739,72 +933,67 @@ export async function equipmentForm(main, id) {
 
 export async function profile(main) {
     const me = await get('/api/users/me');
+    const lang = languages.find((l) => l.code === me.preferredLanguage);
     mount(main, html`
         <div class="stack" style="max-width:640px;margin:0 auto">
             <div class="card">
-                <h1>${t('ui.profile.title')}</h1>
-                <p class="muted">📞 ${me.phone} · ${t('ui.profile.rating')}: ${stars(me.averageRating, me.reviewCount)}</p>
+                <h1>👤 ${me.name}</h1>
+                <p class="muted">📱 ${me.phone} · ⭐ ${stars(me.averageRating, me.reviewCount)}</p>
+                <button type="button" class="btn block" id="change-lang">🌐 ${lang ? lang.nativeName : ''}</button>
+            </div>
+            <div class="card">
+                <h2>✏️ ${t('ui.profile.title')}</h2>
                 <form id="profile-form" novalidate>
-                    <div class="field"><label for="name">${t('ui.auth.name')}</label><input id="name" name="name" value="${me.name}" required></div>
-                    <div class="field"><label for="email">${t('ui.auth.email')}</label><input id="email" name="email" type="email" value="${me.email ?? ''}"></div>
-                    <div class="field"><label for="address">${t('ui.form.address')}</label><input id="address" name="address" value="${me.address ?? ''}"></div>
-                    <div class="grid two">
-                        <div class="field"><label for="role">${t('ui.profile.role')}</label>
-                            <select id="role" name="role">${['BOTH', 'RENTER', 'OWNER'].map((r) => html`<option value="${r}" ${r === me.role ? 'selected' : ''}>${t('ui.role.' + r)}</option>`)}</select></div>
-                        <div class="field"><label for="preferredLanguage">${t('ui.lang.label')}</label>
-                            <select id="preferredLanguage" name="preferredLanguage">${languages.map((l) => html`<option value="${l.code}" ${l.code === me.preferredLanguage ? 'selected' : ''}>${l.nativeName}</option>`)}</select></div>
-                    </div>
+                    <div class="field"><label for="name">👤 ${t('ui.auth.name')}</label><input id="name" name="name" value="${me.name}" required></div>
+                    <div class="field"><label for="address">🏡 ${t('ui.form.address')}</label><input id="address" name="address" value="${me.address ?? ''}"></div>
+                    ${roleChoices(me.role)}
                     <div class="field">
                         <button type="button" id="prof-locate" class="btn block">📍 ${t('ui.auth.shareLocation')}</button>
-                        <div id="prof-located" class="hint" ${me.latitude != null ? '' : 'hidden'}>✓ ${t('ui.auth.locationSet')}</div>
+                        <div id="prof-located" class="hint" ${me.latitude != null ? '' : 'hidden'}>✅ ${t('ui.auth.locationSet')}</div>
                     </div>
-                    <button class="btn primary" type="submit">${t('ui.form.save')}</button>
+                    <details class="field" ${me.email ? 'open' : ''}><summary class="muted">✉️ ${t('ui.auth.email')}</summary>
+                        <input id="email" name="email" type="email" value="${me.email ?? ''}" style="margin-top:8px"></details>
+                    <button class="btn primary block" type="submit">💾 ${t('ui.form.save')}</button>
                 </form>
             </div>
 
             <div class="card">
-                <h2>${t('ui.profile.password')}</h2>
+                <h2>🔒 ${t('ui.profile.password')}</h2>
                 <form id="password-form" novalidate>
-                    <div class="field"><label for="currentPassword">${t('ui.profile.currentPassword')}</label>
-                        <input id="currentPassword" name="currentPassword" type="password" autocomplete="current-password"></div>
-                    <div class="field"><label for="newPassword">${t('ui.profile.newPassword')} <span class="hint">${t('ui.auth.passwordHint')}</span></label>
-                        <input id="newPassword" name="newPassword" type="password" autocomplete="new-password"></div>
-                    <button class="btn" type="submit">${t('ui.profile.password')}</button>
+                    ${passwordField('currentPassword', 'currentPassword', 'current-password', t('ui.profile.currentPassword'))}
+                    ${passwordField('newPassword', 'newPassword', 'new-password', html`${t('ui.profile.newPassword')} <span class="hint">${t('ui.auth.passwordHint')}</span>`)}
+                    <button class="btn block" type="submit">${t('ui.profile.password')}</button>
                 </form>
             </div>
 
-            <div class="card"><button class="btn block" id="logout">${t('ui.auth.logout')}</button></div>
+            <div class="card"><button class="btn block" id="logout">🚪 ${t('ui.auth.logout')}</button></div>
 
-            <div class="card" style="border-color:var(--red)">
-                <h2>${t('ui.profile.delete')}</h2>
-                ${deleteForm()}
-            </div>
+            <details class="card" style="border-color:var(--red)">
+                <summary style="color:var(--red);font-weight:700">🗑️ ${t('ui.profile.delete')}</summary>
+                <div style="margin-top:10px">${deleteForm()}</div>
+            </details>
         </div>`);
 
+    $('#change-lang').addEventListener('click', () => chooseLanguage());
     let coords = me.latitude != null ? { lat: me.latitude, lng: me.longitude } : null;
     $('#prof-locate').addEventListener('click', async () => {
         try { coords = await locate(); $('#prof-located').hidden = false; } catch { toast(t('ui.browse.locationDenied'), true); }
     });
     $('#profile-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const data = formData(e.target);
+        const data = { ...formData(e.target), preferredLanguage: currentLang() };
         if (coords) Object.assign(data, { latitude: coords.lat, longitude: coords.lng });
         const saved = await attempt(() => put('/api/users/me', data), e.target);
         if (!saved) return;
-        session.updateUser({ name: saved.name, preferredLanguage: saved.preferredLanguage });
-        if (saved.preferredLanguage !== currentLang()) {
-            await setLang(saved.preferredLanguage);
-            renderNav();
-            profile(main);
-        }
-        toast(t('ui.form.saved'));
+        session.updateUser({ name: saved.name });
+        toast(`✅ ${t('ui.form.saved')}`);
     });
     $('#password-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const ok = await attempt(() => put('/api/users/me/password', formData(e.target)).then(() => true), e.target);
-        if (ok) { e.target.reset(); toast(t('ui.profile.passwordChanged')); }
+        if (ok) { e.target.reset(); toast(`✅ ${t('ui.profile.passwordChanged')}`); }
     });
-    $('#logout').addEventListener('click', async () => {
+    $('#logout').addEventListener('click', () => {
         session.clear();
         renderNav();
         location.hash = '#/';
@@ -816,20 +1005,20 @@ function deleteForm() {
     return html`
         <p class="small">${t('ui.profile.deleteHelp')}</p>
         <form id="delete-form" novalidate>
-            <div class="field"><label for="del-password">${t('ui.profile.deleteConfirm')}</label>
-                <input id="del-password" name="password" type="password" autocomplete="current-password"></div>
-            <button class="btn danger solid" type="submit">${t('ui.profile.delete')}</button>
+            ${passwordField('del-password', 'password', 'current-password', t('ui.profile.deleteConfirm'))}
+            <button class="btn danger solid block" type="submit">🗑️ ${t('ui.profile.delete')}</button>
         </form>`;
 }
 
 function wireDeleteForm() {
     $('#delete-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!(await confirmDialog(t('ui.profile.delete') + '?', 'ui.profile.delete', true))) return;
         const ok = await attempt(() => del('/api/users/me', formData(e.target)).then(() => true), e.target);
         if (!ok) return;
         session.clear();
         renderNav();
-        mount($('#main'), html`<div class="card empty"><h2>${t('ui.profile.deleted')}</h2></div>`);
+        mount($('#main'), html`<div class="card empty"><div style="font-size:3rem">👋</div><h2>${t('ui.profile.deleted')}</h2></div>`);
     });
 }
 
@@ -837,10 +1026,10 @@ function wireDeleteForm() {
 export async function deleteAccount(main) {
     mount(main, html`
         <div class="card prose" style="margin:0 auto">
-            <h1>${t('ui.deletePage.title')}</h1>
+            <h1>🗑️ ${t('ui.deletePage.title')}</h1>
             <p>${t('ui.deletePage.intro')}</p>
             <p>${t('ui.deletePage.what')}</p>
-            ${session.loggedIn ? deleteForm() : html`<a class="btn primary" href="#/login" id="del-login">${t('ui.deletePage.login')}</a>`}
+            ${session.loggedIn ? deleteForm() : html`<a class="btn primary" href="#/login" id="del-login">👤 ${t('ui.deletePage.login')}</a>`}
         </div>`);
     if (session.loggedIn) wireDeleteForm();
     else $('#del-login').addEventListener('click', () => sessionStorage.setItem('agrishare.after-login', '#/delete-account'));
