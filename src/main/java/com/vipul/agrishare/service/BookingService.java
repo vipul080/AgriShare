@@ -229,6 +229,21 @@ public class BookingService {
                 .toList();
     }
 
+    /**
+     * Called by the expiry job, one booking per transaction. Re-checks the status
+     * because the renter/owner may have acted since the job listed it.
+     */
+    @Transactional
+    public boolean expireIfStill(Long bookingId, Status expected) {
+        Booking booking = bookingRepository.findById(bookingId).orElse(null);
+        if (booking == null || booking.getStatus() != expected) {
+            return false;
+        }
+        booking.setStatus(Status.EXPIRED);
+        releaseAuthorization(booking);
+        return true;
+    }
+
     /** Authorized-but-uncaptured money is returned by the gateway on its own; just record that. */
     static void releaseAuthorization(Booking booking) {
         if (booking.getPaymentStatus() == PaymentStatus.AUTHORIZED
