@@ -16,6 +16,7 @@ import com.vipul.agrishare.exception.ApiException;
 import com.vipul.agrishare.payment.PaymentGateway;
 import com.vipul.agrishare.repository.BookingRepository;
 import com.vipul.agrishare.repository.EquipmentRepository;
+import com.vipul.agrishare.repository.ReviewRepository;
 import com.vipul.agrishare.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,7 +28,9 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +44,7 @@ public class BookingService {
     private final UserRepository userRepository;
     private final PaymentGateway paymentGateway;
     private final NotificationService notificationService;
+    private final ReviewRepository reviewRepository;
     private final Clock clock;
 
     @Transactional
@@ -217,21 +221,17 @@ public class BookingService {
         if (!booking.isRenter(userId) && !booking.isOwner(userId)) {
             throw ApiException.forbidden("error.forbidden");
         }
-        return toResponse(booking, userId);
+        return toResponse(booking, userId, reviewRepository.existsByBookingIdAndReviewerId(bookingId, userId));
     }
 
     @Transactional(readOnly = true)
     public List<BookingResponse> listMine(Long renterId) {
-        return bookingRepository.findByRenterIdOrderByCreatedAtDesc(renterId).stream()
-                .map(b -> toResponse(b, renterId))
-                .toList();
+        return withReviewFlags(bookingRepository.findByRenterIdOrderByCreatedAtDesc(renterId), renterId);
     }
 
     @Transactional(readOnly = true)
     public List<BookingResponse> listIncoming(Long ownerId) {
-        return bookingRepository.findByEquipmentOwnerIdOrderByCreatedAtDesc(ownerId).stream()
-                .map(b -> toResponse(b, ownerId))
-                .toList();
+        return withReviewFlags(bookingRepository.findByEquipmentOwnerIdOrderByCreatedAtDesc(ownerId), ownerId);
     }
 
     /** Taken date ranges from today on, for greying out the booking calendar. */
@@ -292,7 +292,24 @@ public class BookingService {
         }
     }
 
+    private List<BookingResponse> withReviewFlags(List<Booking> bookings, Long viewerId) {
+        List<Long> completed = bookings.stream()
+                .filter(b -> b.getStatus() == Status.COMPLETED)
+                .map(Booking::getId)
+                .toList();
+        Set<Long> reviewed = completed.isEmpty()
+                ? Set.of()
+                : new HashSet<>(reviewRepository.findReviewedBookingIds(viewerId, completed));
+        return bookings.stream()
+                .map(b -> toResponse(b, viewerId, reviewed.contains(b.getId())))
+                .toList();
+    }
+
     BookingResponse toResponse(Booking b, Long viewerId) {
+        return toResponse(b, viewerId, false); // right after an action: no review can exist yet
+    }
+
+    private BookingResponse toResponse(Booking b, Long viewerId, boolean reviewedByMe) {
         Equipment e = b.getEquipment();
         User owner = e.getOwner();
         boolean contactsVisible = b.getStatus() == Status.CONFIRMED || b.getStatus() == Status.COMPLETED;
@@ -322,6 +339,7 @@ public class BookingService {
                 contactsVisible ? b.getRenter().getPhone() : null,
                 contactsVisible ? owner.getPhone() : null,
                 checkout,
+                reviewedByMe,
                 b.getCreatedAt()
         );
     }

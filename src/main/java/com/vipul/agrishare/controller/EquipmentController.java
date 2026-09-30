@@ -3,10 +3,12 @@ package com.vipul.agrishare.controller;
 import com.vipul.agrishare.dto.BookedRange;
 import com.vipul.agrishare.dto.EquipmentRequest;
 import com.vipul.agrishare.dto.EquipmentResponse;
+import com.vipul.agrishare.dto.ReviewResponse;
 import com.vipul.agrishare.entity.Equipment;
 import com.vipul.agrishare.security.UserPrincipal;
 import com.vipul.agrishare.service.BookingService;
 import com.vipul.agrishare.service.EquipmentService;
+import com.vipul.agrishare.service.ReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,7 @@ public class EquipmentController {
 
     private final EquipmentService equipmentService;
     private final BookingService bookingService;
+    private final ReviewService reviewService;
 
     /** Public: browse/search. Pass lat & lng for nearest-first radius search. */
     @GetMapping
@@ -56,6 +59,12 @@ public class EquipmentController {
     @GetMapping("/{id}/booked-dates")
     public List<BookedRange> bookedDates(@PathVariable Long id) {
         return bookingService.bookedDates(id);
+    }
+
+    /** Public: what renters said about this machine. */
+    @GetMapping("/{id}/reviews")
+    public ReviewResponse.Page reviews(@PathVariable Long id) {
+        return reviewService.forEquipment(id);
     }
 
     @PostMapping

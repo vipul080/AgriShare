@@ -25,6 +25,7 @@ Done (committed + pushed):
 - Roadmap 4: `BookingExpiryJob` (every 5 min).
 - Roadmap 5: V5 notifications (type + JSONB params), `NotificationText` renders named placeholders,
   push sent AFTER_COMMIT via `PushSender` (`LoggingPushSender` unless `app.push.mode=fcm`).
+- Roadmap 6: V6 two-way reviews (renter->owner+machine, owner->renter); `RatingService` aggregates on read.
 
 Play Store target: needs in-app + web account deletion (DELETE /api/users/me, roadmap 7),
 a public privacy policy page (/privacy, roadmap 9), an FCM `PushSender`, production deploy notes.
