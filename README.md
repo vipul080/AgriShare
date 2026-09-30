@@ -84,4 +84,3 @@ Users / Equipment / Bookings / Payments / Reviews
 - [ ] Reviews + ratings
 - [ ] Testcontainers integration tests
 - [ ] Android client
-
