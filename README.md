@@ -1,4 +1,4 @@
-# KisanShare — farmer-to-farmer farm machine sharing
+# KisanShare : farmer-to-farmer farm machine sharing
 
 KisanShare lets small and marginal farmers rent tractors, rotavators, seed drills and other
 machines from farmers in nearby villages, and earn from their own machines when they would
@@ -24,7 +24,7 @@ Built as the technical project behind a Tata Young Social Innovators submission
 
 ## How it compares
 
-Farm machine rental apps already exist — the government's CHC Farm Machinery app (institutional
+Farm machine rental apps already exist, the government's CHC Farm Machinery app (institutional
 Custom Hiring Centres), and private platforms such as KisanKraft and Kisanwala. KisanShare's focus is
 narrower: privately owned machines shared between neighbouring small farmers, a cash-first flow
 with no fee on cash, and an interface built for low literacy in nine Indian languages.
@@ -94,7 +94,7 @@ Spring Boot  (Controller → Service → Repository)
 
 ## Design notes
 
-- **Pessimistic locking** on the machine row before the overlap check — booking clashes are
+- **Pessimistic locking** on the machine row before the overlap check, booking clashes are
   rare but costly, so every booking attempt for one machine is serialised.
 - **Optimistic `@Version`** on bookings, because farmers and the expiry job can act on the same
   booking at the same moment; the loser gets a friendly "someone changed this" message.
