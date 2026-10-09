@@ -98,7 +98,7 @@ Spring Boot  (Controller → Service → Repository)
   rare but costly, so every booking attempt for one machine is serialised.
 - **Optimistic `@Version`** on bookings, because farmers and the expiry job can act on the same
   booking at the same moment; the loser gets a friendly "someone changed this" message.
-- **`BigDecimal`** for all money — never `double`/`float`; payments are sent to the gateway in paise.
+- **`BigDecimal`** for all money, never `double`/`float`; payments are sent to the gateway in paise.
 - **Manual capture**: money is authorised at checkout and captured on owner approval. Razorpay
   auto-refunds uncaptured payments after 5 days, so unanswered requests expire at 96 h.
 - **Notifications store type + parameters, not text**, so they are shown in whatever language
